@@ -64,6 +64,15 @@
         - /root/beoftexas/data
         - /root/beoftexas/data/nginx
         - /root/beoftexas/data/certbot
+        - /root/beoftexas/secret
+
+    - name: copy secrets
+      copy:
+        src: "../secret/{{ item }}"
+        dest: "/root/beoftexas/secret/{{ item }}"
+      loop:
+      - beoftexas_db_pw.txt
+      - beoftexas_db_root_pw.txt
 
           #    - name: copy Docker Compose files
           #      copy:
