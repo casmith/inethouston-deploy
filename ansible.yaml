@@ -98,4 +98,4 @@
         name: "check dirs"
         minute: "0"
         hour: "0"
-        job: "/root/work/backup.sh > /dev/null"
+        job: "/root/beoftexas/backup.sh > /dev/null"
