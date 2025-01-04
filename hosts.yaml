@@ -1,0 +1,5 @@
+all:
+  hosts:
+    web01:
+      ansible_host: nietzsche.inethouston.net
+      ansible_user: root
