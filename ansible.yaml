@@ -85,6 +85,14 @@
           #        project_src: /root/beoftexas
           #      register: output
           #
+
+    - name: copy scripts
+      copy:
+        src: "scripts/{{ item }}"
+        dest: "/root/beoftexas/{{ item }}"
+      loop:
+        - backup.sh
+
     - name: Create backup cronjob
       ansible.builtin.cron:
         name: "check dirs"
