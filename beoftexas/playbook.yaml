@@ -22,6 +22,7 @@
       loop:
         - beoftexas_db_pw.txt
         - beoftexas_db_root_pw.txt
+        - strapi_db_pw.txt
 
     - name: Copy Docker Compose files
       ansible.builtin.copy:

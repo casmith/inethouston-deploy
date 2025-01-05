@@ -9,6 +9,8 @@ services:
       DATABASE_USERNAME: strapi
     volumes:
       - ./app:/srv/app
+    secrets:
+      - strapi_db_pw
     depends_on:
       - postgres
     entrypoint: [ '/bin/sh', '-c', 'export DATABASE_PASSWORD=$$(cat /run/secrets/strapi_db_pw) ; source /usr/local/bin/docker-entrypoint.sh' ]
@@ -21,9 +23,11 @@ services:
       POSTGRES_PASSWORD_FILE: /run/secrets/strapi_db_pw
     volumes:
       - ./postgres:/var/lib/postgresql/data
+    secrets:
+      - strapi_db_pw
     restart: always
 networks:
-   default:
+  default:
     name: work_default
     external: true
 secrets:
