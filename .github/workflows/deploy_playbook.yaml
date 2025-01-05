@@ -37,4 +37,6 @@ jobs:
           ANSIBLE_USER: ${{ secrets.ANSIBLE_USER }}
           ANSIBLE_HOST_KEY_CHECKING: False
         run: |
+          ansible-playbook -i hosts.yaml playbook.yaml --private-key private_key.pem -u ${{ secrets.ANSIBLE_USER }}
           ansible-playbook -i hosts.yaml beoftexas/playbook.yaml --private-key private_key.pem -u ${{ secrets.ANSIBLE_USER }}
+          ansible-playbook -i hosts.yaml projectsend/playbook.yaml --private-key private_key.pem -u ${{ secrets.ANSIBLE_USER }}
