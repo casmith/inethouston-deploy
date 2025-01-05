@@ -1,0 +1,90 @@
+version: '3.3'
+services:
+  strapi:
+    image: strapi/strapi
+    environment:
+      DATABASE_CLIENT: postgres
+      DATABASE_NAME: strapi
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USERNAME: strapi
+      DATABASE_PASSWORD: strapi
+    volumes:
+      - ./app:/srv/app
+    ports:
+      - '1337:1337'
+    depends_on:
+      - postgres
+    restart: always
+  postgres:
+    image: postgres
+    environment:
+      POSTGRES_DB: strapi
+      POSTGRES_USER: strapi
+      POSTGRES_PASSWORD: strapi
+    volumes:
+      - ./data:/var/lib/postgresql/data
+    restart: always
+  beoftexas:
+    image: casmith/beoftexas:2024.10.29.14fed939
+    secrets:
+     - beoftexas_db_pw
+    ports:
+     - 8000:8000
+    environment:
+      DB_NAME: beoftexas
+      DB_HOST: work_db_1
+      DB_USER: beoftexas
+      DB_PASSWORD_FILE: /run/secrets/beoftexas_db_pw
+      STRAPI_URL: http://nietzsche.inethouston.net:1337
+    restart: always
+  wbaoftexas:
+    image: casmith/wbaoftexas:2024.12.15.084d7de9
+    secrets:
+     - wbaoftexas_db_pw
+    environment:
+      DB_NAME: wbaoftexas
+      DB_HOST: work_db_1
+      DB_USER: wbaoftexas
+      DB_PASSWORD_FILE: /run/secrets/wbaoftexas_db_pw
+    restart: always
+  nginx:
+    image: nginx:1.15-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./data/nginx:/etc/nginx/conf.d
+      - ./data/certbot/conf:/etc/letsencrypt
+      - ./data/certbot/www:/var/www/certbot
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: always
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - ./data/certbot/conf:/etc/letsencrypt
+      - ./data/certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    restart: always
+  db:
+    image: mariadb
+    restart: always
+    secrets:
+     - beoftexas_db_root_pw
+     - beoftexas_db_pw
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/beoftexas_db_root_pw
+      MYSQL_DATABASE: beoftexas
+      MYSQL_USER: beoftexas
+      MYSQL_PASSWORD_FILE: /run/secrets/beoftexas_db_pw
+    volumes:
+     - ./mariadb/data:/var/lib/mysql
+
+secrets:
+  beoftexas_db_root_pw:
+    file: ./beoftexas_db_root_pw.txt
+  beoftexas_db_pw:
+    file: ./beoftexas_db_pw.txt
+  wbaoftexas_db_pw:
+    file: ./wbaoftexas_db_pw.txt
