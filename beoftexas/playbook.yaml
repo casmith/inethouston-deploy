@@ -13,6 +13,9 @@
         - /root/beoftexas/data/nginx
         - /root/beoftexas/data/certbot
         - /root/beoftexas/secret
+        - /root/beoftexas/strapi
+        - /root/beoftexas/strapi/scripts
+
 
     - name: Copy secrets
       ansible.builtin.copy:
@@ -31,6 +34,14 @@
         mode: "0600"
       loop:
         - docker-compose.yaml
+
+    - name: Copy strapi entrypoint 
+      ansible.builtin.copy:
+        src: "scripts/{{ item }}"
+        dest: "/root/beoftexas/strapi/scripts/{{ item }}"
+        mode: "0700"
+      loop:
+        - strapi-entrypoint.sh
 
     - name: Create and start services
       community.docker.docker_compose_v2:
