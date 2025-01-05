@@ -13,7 +13,7 @@ services:
       - strapi_db_pw
     depends_on:
       - postgres
-    entrypoint: [ '/bin/sh', '-c', 'export DATABASE_PASSWORD=$$(cat /run/secrets/strapi_db_pw) ; source /usr/local/bin/docker-entrypoint.sh' ]
+    entrypoint: [ '/bin/sh', '-c', 'export DATABASE_PASSWORD=$(cat /run/secrets/strapi_db_pw) ; source /usr/local/bin/docker-entrypoint.sh' ]
     restart: always
   postgres:
     image: postgres
