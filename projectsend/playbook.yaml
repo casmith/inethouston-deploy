@@ -1,0 +1,53 @@
+- name: Deploy ProjectSend
+  hosts: web01
+  become: yes
+  vars: 
+    project_name: projectsend
+    root_dir: /root/projectsend
+  tasks:
+    - name: Creates directory
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "{{ root_dir }}/secret"
+        - "{{ root_dir }}/data"
+        - "{{ root_dir }}/data/mariadb"
+        - "{{ root_dir }}/data/web"
+        - "{{ root_dir }}/data/config"
+
+    - name: copy secrets
+      copy:
+        src: "../secret/{{ item }}"
+        dest: "{{ root_dir }}/secret/{{ item }}"
+      loop:
+        - "{{ project_name }}_db_pw.txt"
+        - "{{ project_name }}_db_root_pw.txt"
+
+    - name: copy Docker Compose files
+      copy:
+        src: "{{ item }}"
+        dest: "{{ root_dir }}/{{ item }}"
+      loop:
+      - docker-compose.yaml
+
+    - name: Create and start services
+      community.docker.docker_compose_v2:
+        project_src: "{{ root_dir }}"
+        project_name: "{{ project_name }}"
+        remove_orphans: true
+      register: output
+
+    # - name: copy scripts
+    #   copy:
+    #     src: "scripts/{{ item }}"
+    #     dest: "{{ root_dir }}/{{ item }}"
+    #   loop:
+    #     - backup.sh
+
+    # - name: Create backup cronjob
+    #   ansible.builtin.cron:
+    #     name: "check dirs"
+    #     minute: "0"
+    #     hour: "0"
+    #     job: "{{ root_dir }}/backup.sh > /dev/null"

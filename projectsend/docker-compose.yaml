@@ -1,0 +1,33 @@
+services:
+  db:
+    image: mariadb
+    restart: always
+    secrets:
+     - projectsend_db_root_pw
+     - projectsend_db_pw
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/projectsend_db_root_pw
+      MYSQL_DATABASE: projectsend
+      MYSQL_USER: projectsend
+      MYSQL_PASSWORD_FILE: /run/secrets/projectsend_db_pw
+    volumes:
+     - ./data/mariadb:/var/lib/mysql
+  web:
+    image: lscr.io/linuxserver/projectsend:latest
+    restart: always
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - ./data/config:/config
+      - ./data/web:/data
+networks:
+   default:
+    name: work_default
+    external: true
+secrets:
+  projectsend_db_root_pw:
+    file: ./secret/projectsend_db_root_pw.txt
+  projectsend_db_pw:
+    file: ./secret/projectsend_db_pw.txt
