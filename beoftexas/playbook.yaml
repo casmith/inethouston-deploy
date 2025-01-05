@@ -1,51 +1,46 @@
 - name: Deploy Benefit Elect of Texas website via Docker
   hosts: web01
-  become: yes
+  become: true
   tasks:
-  
+
     - name: Creates directory
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory
+        mode: "0700"
       loop:
         - /root/beoftexas/data
         - /root/beoftexas/data/nginx
         - /root/beoftexas/data/certbot
         - /root/beoftexas/secret
 
-    - name: copy secrets
-      copy:
+    - name: Copy secrets
+      ansible.builtin.copy:
         src: "../secret/{{ item }}"
         dest: "/root/beoftexas/secret/{{ item }}"
+        mode: "0600"
       loop:
-      - beoftexas_db_pw.txt
-      - beoftexas_db_root_pw.txt
+        - beoftexas_db_pw.txt
+        - beoftexas_db_root_pw.txt
 
-          #    - name: copy Docker Compose files
-          #      copy:
-          #        src: "{{ item }}"
-          #        dest: "/root/beoftexas/{{ item }}"
-          #      loop:
-          #      - docker-compose.yaml
+    - name: Copy Docker Compose files
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/root/beoftexas/{{ item }}"
+        mode: "0600"
+      loop:
+        - docker-compose.yaml
 
-
-          #    - name: copy nginx config
-          #      copy:
-          #        src: "{{ item }}"
-          #        dest: "/root/beoftexas/{{ item }}"
-          #      loop:
-          #      - data/nginx/app.conf
-
-          #    - name: Create and start services
-          #      community.docker.docker_compose_v2:
-          #        project_src: /root/beoftexas
-          #      register: output
-          #
+    - name: Create and start services
+      community.docker.docker_compose_v2:
+        project_src: /root/beoftexas
+      register: output
 
     - name: copy scripts
-      copy:
+      ansible.builtin.copy:
         src: "scripts/{{ item }}"
         dest: "/root/beoftexas/{{ item }}"
+        mode: "0600"
       loop:
         - backup.sh
 

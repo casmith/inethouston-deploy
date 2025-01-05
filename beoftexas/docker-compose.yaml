@@ -1,0 +1,36 @@
+version: '3.3'
+services:
+  strapi:
+    image: strapi/strapi
+    environment:
+      DATABASE_CLIENT: postgres
+      DATABASE_NAME: strapi
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USERNAME: strapi
+    volumes:
+      - ./app:/srv/app
+    ports:
+      - '1338:1337'
+    depends_on:
+      - postgres
+    entrypoint: [ '/bin/sh', '-c', 'export DATABASE_PASSWORD=$$(cat /run/secrets/strapi_db_pw) ; source /usr/local/bin/docker-entrypoint.sh' ]
+    restart: always
+  postgres:
+    image: postgres
+    environment:
+      POSTGRES_DB: strapi
+      POSTGRES_USER: strapi
+      POSTGRES_PASSWORD_FILE: /run/secrets/strapi_db_pw
+    ports:
+     - '15432:5432'
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+    restart: always
+networks:
+   default:
+    name: work_default
+    external: true
+secrets:
+  strapi_db_pw:
+    file: ./secret/strapi_db_pw.txt
