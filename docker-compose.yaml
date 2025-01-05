@@ -1,30 +1,5 @@
 version: '3.3'
 services:
-  strapi:
-    image: strapi/strapi
-    environment:
-      DATABASE_CLIENT: postgres
-      DATABASE_NAME: strapi
-      DATABASE_HOST: postgres
-      DATABASE_PORT: 5432
-      DATABASE_USERNAME: strapi
-      DATABASE_PASSWORD: strapi
-    volumes:
-      - ./app:/srv/app
-    ports:
-      - '1337:1337'
-    depends_on:
-      - postgres
-    restart: always
-  postgres:
-    image: postgres
-    environment:
-      POSTGRES_DB: strapi
-      POSTGRES_USER: strapi
-      POSTGRES_PASSWORD: strapi
-    volumes:
-      - ./data:/var/lib/postgresql/data
-    restart: always
   beoftexas:
     image: casmith/beoftexas:2024.10.29.14fed939
     secrets:
