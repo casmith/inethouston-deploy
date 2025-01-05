@@ -1,4 +1,3 @@
-version: '3.3'
 services:
   beoftexas:
     image: casmith/beoftexas:2024.10.29.14fed939
