@@ -23,6 +23,7 @@ services:
       POSTGRES_PASSWORD_FILE: /run/secrets/strapi_db_pw
     volumes:
       - ./postgres:/var/lib/postgresql/data
+      - ./strapi/scripts:/scripts
     secrets:
       - strapi_db_pw
     restart: always

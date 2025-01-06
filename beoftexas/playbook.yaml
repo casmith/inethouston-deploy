@@ -37,7 +37,7 @@
 
     - name: Copy strapi entrypoint 
       ansible.builtin.copy:
-        src: "scripts/{{ item }}"
+        src: "strapi/{{ item }}"
         dest: "/root/beoftexas/strapi/scripts/{{ item }}"
         mode: "0700"
       loop:
