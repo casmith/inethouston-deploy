@@ -10,7 +10,7 @@ services:
       DB_HOST: work_db_1
       DB_USER: beoftexas
       DB_PASSWORD_FILE: /run/secrets/beoftexas_db_pw
-      STRAPI_URL: http://nietzsche.inethouston.net:1337
+      STRAPI_URL: https://strapi.beoftexas.com
     restart: always
   wbaoftexas:
     image: casmith/wbaoftexas:2024.12.15.084d7de9
