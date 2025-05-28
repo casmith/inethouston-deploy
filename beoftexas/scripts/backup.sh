@@ -9,7 +9,7 @@ mkdir --parents $WORK_DIR
 rm -rf $WORK_DIR/*
 
 # run the backup
-docker run --rm -v $WORK_DIR:/mysqldump -e DB_USER='beoftexas' -e DB_NAME=beoftexas -e DB_PASS=$(cat $SCRIPT_DIR/secret/beoftexas_db_pw.txt) -e DB_HOST=work_db_1 --network work_default casmith/mysqldump
+docker run --rm -v $WORK_DIR:/mysqldump -e DB_USER='beoftexas' -e DB_NAME=beoftexas -e DB_PASS=$(cat $SCRIPT_DIR/secret/beoftexas_db_pw.txt) -e DB_HOST=work-db-1 --network work_default casmith/mysqldump
 cp $WORK_DIR/*.* $WORK_DIR/beoftexas_latest.sql.gz
 
 # upload
