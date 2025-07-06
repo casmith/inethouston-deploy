@@ -55,6 +55,7 @@
         mode: "0700"
       loop:
         - backup.sh
+        - backup-postgres.sh
 
     - name: Create backup cronjob
       ansible.builtin.cron:
