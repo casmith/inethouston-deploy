@@ -59,14 +59,14 @@
 
     - name: Create backup cronjob
       ansible.builtin.cron:
-        name: "check dirs"
+        name: "backup-mysql"
         minute: "0"
         hour: "0"
         job: "/root/beoftexas/backup.sh > /dev/null"
 
     - name: Create backup cronjob (postgres)
       ansible.builtin.cron:
-        name: "check dirs"
+        name: "backup-postgres"
         minute: "0"
         hour: "0"
         job: "/root/beoftexas/backup-postgres.sh > /dev/null"
