@@ -13,7 +13,7 @@ docker run --rm -v $WORK_DIR:/pgsqldump -e DB_USER='strapi' -e DB_NAME=strapi -e
 cp $WORK_DIR/*.* $WORK_DIR/strapi_latest.sql.gz
 
 # upload
-for filename in $WORK_DIR/*.sql.gz; do aws s3 cp $filename s3://beoftexas-backup/$(basename $filename); done
+for filename in $WORK_DIR/*.sql.gz; do aws --endpoint-url https://usc1.contabostorage.com --profile contabo s3 cp $filename s3://beoftexas-backup/$(basename $filename); done
 
 # clean up
 rm -rf $WORK_DIR/*
