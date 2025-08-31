@@ -67,6 +67,6 @@
     - name: Create backup cronjob (postgres)
       ansible.builtin.cron:
         name: "backup-postgres"
-        minute: "0"
+        minute: "10"
         hour: "0"
         job: "/root/beoftexas/backup-postgres.sh > /dev/null"
