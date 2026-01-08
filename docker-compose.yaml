@@ -1,6 +1,6 @@
 services:
   beoftexas:
-    image: casmith/beoftexas:2024.10.29.14fed939
+    image: casmith/beoftexas:2026.01.07.f1252219
     secrets:
      - beoftexas_db_pw
     ports:
