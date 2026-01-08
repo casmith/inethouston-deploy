@@ -1,5 +1,8 @@
 all:
-  hosts:
-    web01:
-      ansible_host: nietzsche.inethouston.net
-      ansible_user: root
+  children:
+    servers:
+      hosts:
+        web01:
+          ansible_host: 207.244.244.247
+          ansible_user: ubuntu
+          deploy_path: /home/ubuntu/deploy

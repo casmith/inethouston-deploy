@@ -1,6 +1,20 @@
+name: beoftexas
 services:
+  web:
+    image: casmith/beoftexas:2026.01.07.f1252219
+    secrets:
+     - beoftexas_db_pw
+    ports:
+     - 8000:8000
+    environment:
+      DB_NAME: beoftexas
+      DB_HOST: work_db_1
+      DB_USER: beoftexas
+      DB_PASSWORD_FILE: /run/secrets/beoftexas_db_pw
+      STRAPI_URL: https://strapi.beoftexas.com
+    restart: always
   strapi:
-    image: strapi/strapi
+    image: naskio/strapi:4.25.11
     environment:
       DATABASE_CLIENT: postgres
       DATABASE_NAME: strapi
@@ -13,7 +27,6 @@ services:
       - strapi_db_pw
     depends_on:
       - postgres
-    entrypoint: source /scripts/strapi-entrypoint.sh
     restart: always
   postgres:
     image: postgres
@@ -22,15 +35,27 @@ services:
       POSTGRES_USER: strapi
       POSTGRES_PASSWORD_FILE: /run/secrets/strapi_db_pw
     volumes:
-      - ./postgres:/var/lib/postgresql/data
-      - ./strapi/scripts:/scripts
+      - ./postgres:/var/lib/postgresql
     secrets:
       - strapi_db_pw
     restart: always
-networks:
-  default:
-    name: work_default
-    external: true
+  mariadb:
+    image: mariadb
+    restart: always
+    secrets:
+     - beoftexas_db_root_pw
+     - beoftexas_db_pw
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/beoftexas_db_root_pw
+      MYSQL_DATABASE: beoftexas
+      MYSQL_USER: beoftexas
+      MYSQL_PASSWORD_FILE: /run/secrets/beoftexas_db_pw
+    volumes:
+     - ./mariadb/data:/var/lib/mysql
 secrets:
   strapi_db_pw:
-    file: ./secret/strapi_db_pw.txt
+    file: ./strapi_db_pw.txt
+  beoftexas_db_root_pw:
+    file: ./beoftexas_db_root_pw.txt
+  beoftexas_db_pw:
+    file: ./beoftexas_db_pw.txt
