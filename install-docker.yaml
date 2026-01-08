@@ -1,0 +1,214 @@
+- name: Install Docker on Ubuntu 24.04
+  hosts: "{{ target | default('servers') }}"
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Check if Docker is already installed
+      ansible.builtin.command: docker --version
+      register: docker_installed
+      changed_when: false
+      failed_when: false
+
+    - name: Display Docker status
+      ansible.builtin.debug:
+        msg: "{{ 'Docker is already installed: ' ~ docker_installed.stdout if docker_installed.rc == 0 else 'Docker is not installed, proceeding with installation' }}"
+
+    - name: Verify Ubuntu version
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == "Ubuntu"
+          - ansible_distribution_version is version('24.04', '>=')
+        fail_msg: "This playbook is designed for Ubuntu 24.04 or later"
+        success_msg: "Running on Ubuntu {{ ansible_distribution_version }}"
+      when: docker_installed.rc != 0
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: docker_installed.rc != 0
+
+    - name: Install required packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+        state: present
+      when: docker_installed.rc != 0
+
+    - name: Create directory for apt keyrings
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+      when: docker_installed.rc != 0
+
+    - name: Download Docker GPG key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: '0644'
+      when: docker_installed.rc != 0
+
+    - name: Set GPG key permissions
+      ansible.builtin.file:
+        path: /etc/apt/keyrings/docker.asc
+        mode: '0644'
+      when: docker_installed.rc != 0
+
+    - name: Add Docker repository using DEB822 format
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/docker.sources
+        content: |
+          Types: deb
+          URIs: https://download.docker.com/linux/ubuntu
+          Suites: {{ ansible_distribution_release }}
+          Components: stable
+          Signed-By: /etc/apt/keyrings/docker.asc
+        mode: '0644'
+      when: docker_installed.rc != 0
+
+    - name: Update apt cache after adding Docker repo
+      ansible.builtin.apt:
+        update_cache: true
+      when: docker_installed.rc != 0
+
+    - name: Install Docker packages
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+      when: docker_installed.rc != 0
+
+    - name: Ensure Docker service is started and enabled
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+      when: docker_installed.rc != 0
+
+    - name: Install unzip for database restoration
+      ansible.builtin.apt:
+        name:
+          - unzip
+          - curl
+        state: present
+      when: inventory_hostname == 'pve1-ubuntu-1'
+
+    - name: Check if AWS CLI is already installed
+      ansible.builtin.command: aws --version
+      register: aws_cli_check
+      changed_when: false
+      failed_when: false
+      when: inventory_hostname == 'pve1-ubuntu-1'
+
+    - name: Download AWS CLI v2 installer
+      ansible.builtin.get_url:
+        url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+        dest: /tmp/awscliv2.zip
+        mode: '0644'
+      when:
+        - inventory_hostname == 'pve1-ubuntu-1'
+        - aws_cli_check.rc != 0
+
+    - name: Unzip AWS CLI installer
+      ansible.builtin.unarchive:
+        src: /tmp/awscliv2.zip
+        dest: /tmp/
+        remote_src: true
+      when:
+        - inventory_hostname == 'pve1-ubuntu-1'
+        - aws_cli_check.rc != 0
+
+    - name: Install AWS CLI v2
+      ansible.builtin.command: /tmp/aws/install
+      when:
+        - inventory_hostname == 'pve1-ubuntu-1'
+        - aws_cli_check.rc != 0
+
+    - name: Clean up AWS CLI installer files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/awscliv2.zip
+        - /tmp/aws
+      when:
+        - inventory_hostname == 'pve1-ubuntu-1'
+        - aws_cli_check.rc != 0
+
+    - name: Authenticate with Docker Hub
+      ansible.builtin.shell: |
+        echo "{{ docker_password }}" | docker login -u "{{ docker_username }}" --password-stdin
+      when: inventory_hostname == 'pve1-ubuntu-1'
+      vars:
+        docker_username: "{{ lookup('env', 'DOCKER_USERNAME') }}"
+        docker_password: "{{ lookup('env', 'DOCKER_PASSWORD') }}"
+      become: false
+      no_log: true
+      register: docker_login_result
+      failed_when:
+        - docker_login_result.rc != 0
+        - '"Login Succeeded" not in docker_login_result.stdout'
+
+    - name: Verify Docker Hub authentication
+      ansible.builtin.shell: docker run --rm alpine:latest echo "Docker Hub access verified"
+      when: inventory_hostname == 'pve1-ubuntu-1'
+      become: false
+      register: docker_verify
+      failed_when: docker_verify.rc != 0
+      no_log: true
+
+    - name: Display Docker authentication status
+      ansible.builtin.debug:
+        msg: "Docker Hub authentication completed for pve1-ubuntu-1"
+      when: inventory_hostname == 'pve1-ubuntu-1'
+
+    - name: Add user to docker group
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: true
+      when: ansible_user is defined
+
+    - name: Verify user is in docker group
+      ansible.builtin.command: groups {{ ansible_user }}
+      register: user_groups
+      changed_when: false
+      when: ansible_user is defined
+
+    - name: Display user groups
+      ansible.builtin.debug:
+        msg: "User {{ ansible_user }} is in groups: {{ user_groups.stdout }}"
+      when: ansible_user is defined
+
+    - name: Reset SSH connection to apply group changes
+      ansible.builtin.meta: reset_connection
+      when: ansible_user is defined
+
+    - name: Remind about logout requirement
+      ansible.builtin.debug:
+        msg: "NOTE: SSH connection reset to apply docker group membership. If running this playbook standalone, you may need to log out and back in manually."
+      when: ansible_user is defined
+
+    - name: Verify Docker installation
+      ansible.builtin.command: docker --version
+      register: docker_version
+      changed_when: false
+
+    - name: Display Docker version
+      ansible.builtin.debug:
+        msg: "Docker installed successfully: {{ docker_version.stdout }}"
+
+    - name: Verify Docker Compose installation
+      ansible.builtin.command: docker compose version
+      register: compose_version
+      changed_when: false
+
+    - name: Display Docker Compose version
+      ansible.builtin.debug:
+        msg: "Docker Compose installed successfully: {{ compose_version.stdout }}"
