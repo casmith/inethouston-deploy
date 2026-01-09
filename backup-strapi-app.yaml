@@ -1,10 +1,10 @@
 ---
-- name: Backup certbot data to S3
+- name: Backup Strapi app to S3
   hosts: all
   gather_facts: false
   become: true
   vars:
-    certbot_data_path: /home/ubuntu/deploy/nginx/data
+    strapi_app_path: /home/ubuntu/deploy/beoftexas
     s3_access_key: "{{ lookup('env', 'CONTABO_S3_ACCESS_KEY') }}"
     s3_secret_key: "{{ lookup('env', 'CONTABO_S3_SECRET_KEY') }}"
     s3_bucket: "{{ lookup('env', 'CONTABO_S3_BUCKET') | default('beoftexas-backup', true) }}"
@@ -48,11 +48,11 @@
         - /tmp/aws
       when: aws_cli_check.rc != 0
 
-    - name: Verify certbot directory exists
+    - name: Verify Strapi app directory exists
       ansible.builtin.stat:
-        path: "{{ certbot_data_path }}/certbot"
-      register: certbot_dir
-      failed_when: not certbot_dir.stat.exists or not certbot_dir.stat.isdir
+        path: "{{ strapi_app_path }}/app"
+      register: app_dir
+      failed_when: not app_dir.stat.exists or not app_dir.stat.isdir
 
     - name: Generate timestamp
       ansible.builtin.command: date +%Y%m%d_%H%M%S
@@ -65,17 +65,17 @@
 
     - name: Set backup filenames
       ansible.builtin.set_fact:
-        backup_file: "certbot_{{ backup_timestamp }}.tar.gz"
-        backup_latest: "certbot_latest.tar.gz"
+        backup_file: "strapi_app_{{ backup_timestamp }}.tar.gz"
+        backup_latest: "strapi_app_latest.tar.gz"
 
     - name: Display backup info
       ansible.builtin.debug:
         msg: "Creating backup: {{ backup_file }}"
 
-    - name: Create timestamped tar.gz of certbot directory
+    - name: Create timestamped tar.gz of Strapi app directory
       ansible.builtin.shell: |
-        cd {{ certbot_data_path }} && \
-        tar -czf /tmp/{{ backup_file }} certbot/
+        cd {{ strapi_app_path }} && \
+        tar -czf /tmp/{{ backup_file }} app/
       changed_when: true
 
     - name: Create latest copy
@@ -124,7 +124,7 @@
       ansible.builtin.debug:
         msg:
           - "====================================="
-          - "Certbot backup completed successfully!"
+          - "Strapi app backup completed successfully!"
           - "====================================="
           - ""
           - "Backup files uploaded:"
