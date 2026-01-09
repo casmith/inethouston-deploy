@@ -1,3 +1,10 @@
-[env]
-
 [tools]
+ansible = "latest"
+python = "latest"
+
+[env]
+SOPS_AGE_KEY_FILE = "age.key"
+
+[tasks.ansible-ping]
+run = "ansible -i hosts.yml -m ping"
+

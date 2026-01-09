@@ -1,0 +1,155 @@
+---
+- name: Restore nginx configs from S3 backup
+  hosts: web01
+  gather_facts: false
+  become: true
+  vars:
+    nginx_data_path: /home/ubuntu/deploy/nginx/data
+    s3_access_key: "{{ lookup('env', 'CONTABO_S3_ACCESS_KEY') }}"
+    s3_secret_key: "{{ lookup('env', 'CONTABO_S3_SECRET_KEY') }}"
+    s3_bucket: "{{ lookup('env', 'CONTABO_S3_BUCKET') | default('beoftexas-backup', true) }}"
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Check if AWS CLI is already installed
+      ansible.builtin.command: aws --version
+      register: aws_cli_check
+      changed_when: false
+      failed_when: false
+
+    - name: Download AWS CLI v2 installer
+      ansible.builtin.get_url:
+        url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+        dest: /tmp/awscliv2.zip
+        mode: '0644'
+      when: aws_cli_check.rc != 0
+
+    - name: Unzip AWS CLI installer
+      ansible.builtin.unarchive:
+        src: /tmp/awscliv2.zip
+        dest: /tmp/
+        remote_src: true
+      when: aws_cli_check.rc != 0
+
+    - name: Install AWS CLI v2
+      ansible.builtin.command: /tmp/aws/install
+      when: aws_cli_check.rc != 0
+
+    - name: Clean up AWS CLI installer files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/awscliv2.zip
+        - /tmp/aws
+      when: aws_cli_check.rc != 0
+
+    - name: Download nginx configs backup from Contabo S3
+      ansible.builtin.shell: |
+        AWS_ACCESS_KEY_ID="{{ s3_access_key }}" \
+        AWS_SECRET_ACCESS_KEY="{{ s3_secret_key }}" \
+        aws s3 cp s3://{{ s3_bucket }}/nginx_configs_latest.tar.gz /tmp/nginx_configs_latest.tar.gz \
+          --endpoint-url https://usc1.contabostorage.com
+      no_log: false
+      changed_when: true
+
+    - name: Verify backup file was downloaded
+      ansible.builtin.stat:
+        path: /tmp/nginx_configs_latest.tar.gz
+      register: backup_file
+      failed_when: not backup_file.stat.exists or backup_file.stat.size == 0
+
+    - name: Display backup file info
+      ansible.builtin.debug:
+        msg: "Backup file downloaded: {{ backup_file.stat.size }} bytes"
+
+    - name: Create nginx data directory if it doesn't exist
+      ansible.builtin.file:
+        path: "{{ nginx_data_path }}"
+        state: directory
+        mode: '0755'
+
+    - name: Backup existing nginx directory (if exists)
+      ansible.builtin.shell: |
+        if [ -d "{{ nginx_data_path }}/nginx" ]; then
+          mv {{ nginx_data_path }}/nginx {{ nginx_data_path }}/nginx.backup.$(date +%Y%m%d_%H%M%S)
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Test backup file integrity
+      ansible.builtin.shell: tar -tzf /tmp/nginx_configs_latest.tar.gz > /dev/null
+      register: integrity_check
+      changed_when: false
+      failed_when: integrity_check.rc != 0
+
+    - name: Extract nginx configs from backup
+      ansible.builtin.shell: |
+        cd {{ nginx_data_path }} && \
+        tar -xzf /tmp/nginx_configs_latest.tar.gz
+      register: extract_result
+      changed_when: true
+
+    - name: Display extraction completion
+      ansible.builtin.debug:
+        msg: "Nginx configs extracted successfully"
+
+    - name: Verify nginx directory exists
+      ansible.builtin.stat:
+        path: "{{ nginx_data_path }}/nginx"
+      register: nginx_dir
+      failed_when: not nginx_dir.stat.exists or not nginx_dir.stat.isdir
+
+    - name: Display nginx directory status
+      ansible.builtin.debug:
+        msg: "Nginx configs verified at {{ nginx_data_path }}/nginx"
+
+    - name: Test nginx configuration
+      ansible.builtin.shell: docker exec work-nginx-1 nginx -t
+      register: nginx_test
+      changed_when: false
+      failed_when: false
+
+    - name: Display nginx config test result
+      ansible.builtin.debug:
+        msg: "{{ nginx_test.stderr }}"
+
+    - name: Reload nginx if config is valid
+      ansible.builtin.shell: docker exec work-nginx-1 nginx -s reload
+      when: nginx_test.rc == 0
+      register: nginx_reload
+      changed_when: true
+
+    - name: Display reload status
+      ansible.builtin.debug:
+        msg: "Nginx reloaded successfully"
+      when: nginx_test.rc == 0
+
+    - name: Warn if nginx config test failed
+      ansible.builtin.debug:
+        msg: "WARNING: Nginx config test failed. Please review the configuration manually."
+      when: nginx_test.rc != 0
+
+    - name: Clean up temporary backup file
+      ansible.builtin.file:
+        path: /tmp/nginx_configs_latest.tar.gz
+        state: absent
+
+    - name: Display final status
+      ansible.builtin.debug:
+        msg:
+          - "====================================="
+          - "Nginx configs restore completed!"
+          - "====================================="
+          - ""
+          - "Manual verification steps:"
+          - "1. Check nginx status: docker ps | grep nginx"
+          - "2. Check nginx logs: docker logs work-nginx-1"
+          - "3. Test web services are accessible"
+          - ""
+          - "Note: Previous nginx directory (if any) was backed up with timestamp suffix"

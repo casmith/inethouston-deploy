@@ -1,0 +1,129 @@
+---
+- name: Backup certbot data to S3
+  hosts: nietzsche
+  gather_facts: false
+  become: true
+  vars:
+    certbot_data_path: /home/ubuntu/work/data
+    s3_access_key: "{{ lookup('env', 'CONTABO_S3_ACCESS_KEY') }}"
+    s3_secret_key: "{{ lookup('env', 'CONTABO_S3_SECRET_KEY') }}"
+    s3_bucket: "{{ lookup('env', 'CONTABO_S3_BUCKET') | default('beoftexas-backup', true) }}"
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Check if AWS CLI is already installed
+      ansible.builtin.command: aws --version
+      register: aws_cli_check
+      changed_when: false
+      failed_when: false
+
+    - name: Download AWS CLI v2 installer
+      ansible.builtin.get_url:
+        url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+        dest: /tmp/awscliv2.zip
+        mode: '0644'
+      when: aws_cli_check.rc != 0
+
+    - name: Unzip AWS CLI installer
+      ansible.builtin.unarchive:
+        src: /tmp/awscliv2.zip
+        dest: /tmp/
+        remote_src: true
+      when: aws_cli_check.rc != 0
+
+    - name: Install AWS CLI v2
+      ansible.builtin.command: /tmp/aws/install
+      when: aws_cli_check.rc != 0
+
+    - name: Clean up AWS CLI installer files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/awscliv2.zip
+        - /tmp/aws
+      when: aws_cli_check.rc != 0
+
+    - name: Verify certbot directory exists
+      ansible.builtin.stat:
+        path: "{{ certbot_data_path }}/certbot"
+      register: certbot_dir
+      failed_when: not certbot_dir.stat.exists or not certbot_dir.stat.isdir
+
+    - name: Generate timestamp
+      ansible.builtin.set_fact:
+        backup_timestamp: "{{ ansible_date_time.year }}{{ ansible_date_time.month }}{{ ansible_date_time.day }}_{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}{{ ansible_date_time.second }}"
+
+    - name: Set backup filenames
+      ansible.builtin.set_fact:
+        backup_file: "certbot_{{ backup_timestamp }}.tar.gz"
+        backup_latest: "certbot_latest.tar.gz"
+
+    - name: Display backup info
+      ansible.builtin.debug:
+        msg: "Creating backup: {{ backup_file }}"
+
+    - name: Create timestamped tar.gz of certbot directory
+      ansible.builtin.shell: |
+        cd {{ certbot_data_path }} && \
+        tar -czf /tmp/{{ backup_file }} certbot/
+      changed_when: true
+
+    - name: Create latest copy
+      ansible.builtin.copy:
+        src: "/tmp/{{ backup_file }}"
+        dest: "/tmp/{{ backup_latest }}"
+        remote_src: true
+        mode: '0644'
+
+    - name: Verify backup files were created
+      ansible.builtin.stat:
+        path: "/tmp/{{ item }}"
+      register: backup_files
+      loop:
+        - "{{ backup_file }}"
+        - "{{ backup_latest }}"
+      failed_when: not backup_files.results[0].stat.exists or backup_files.results[0].stat.size == 0
+
+    - name: Upload timestamped backup to S3
+      ansible.builtin.shell: |
+        AWS_ACCESS_KEY_ID="{{ s3_access_key }}" \
+        AWS_SECRET_ACCESS_KEY="{{ s3_secret_key }}" \
+        aws s3 cp /tmp/{{ backup_file }} s3://{{ s3_bucket }}/{{ backup_file }} \
+          --endpoint-url https://usc1.contabostorage.com
+      no_log: false
+      changed_when: true
+
+    - name: Upload latest backup to S3
+      ansible.builtin.shell: |
+        AWS_ACCESS_KEY_ID="{{ s3_access_key }}" \
+        AWS_SECRET_ACCESS_KEY="{{ s3_secret_key }}" \
+        aws s3 cp /tmp/{{ backup_latest }} s3://{{ s3_bucket }}/{{ backup_latest }} \
+          --endpoint-url https://usc1.contabostorage.com
+      no_log: false
+      changed_when: true
+
+    - name: Clean up temporary backup files
+      ansible.builtin.file:
+        path: "/tmp/{{ item }}"
+        state: absent
+      loop:
+        - "{{ backup_file }}"
+        - "{{ backup_latest }}"
+
+    - name: Display final status
+      ansible.builtin.debug:
+        msg:
+          - "====================================="
+          - "Certbot backup completed successfully!"
+          - "====================================="
+          - ""
+          - "Backup files uploaded:"
+          - "  - {{ backup_file }}"
+          - "  - {{ backup_latest }}"
+          - ""
+          - "S3 Bucket: {{ s3_bucket }}"

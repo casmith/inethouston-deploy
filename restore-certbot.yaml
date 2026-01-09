@@ -1,0 +1,144 @@
+---
+- name: Restore certbot data from S3 backup
+  hosts: web01
+  gather_facts: false
+  become: true
+  vars:
+    certbot_data_path: /home/ubuntu/deploy/nginx/data
+    s3_access_key: "{{ lookup('env', 'CONTABO_S3_ACCESS_KEY') }}"
+    s3_secret_key: "{{ lookup('env', 'CONTABO_S3_SECRET_KEY') }}"
+    s3_bucket: "{{ lookup('env', 'CONTABO_S3_BUCKET') | default('beoftexas-backup', true) }}"
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Check if AWS CLI is already installed
+      ansible.builtin.command: aws --version
+      register: aws_cli_check
+      changed_when: false
+      failed_when: false
+
+    - name: Download AWS CLI v2 installer
+      ansible.builtin.get_url:
+        url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+        dest: /tmp/awscliv2.zip
+        mode: '0644'
+      when: aws_cli_check.rc != 0
+
+    - name: Unzip AWS CLI installer
+      ansible.builtin.unarchive:
+        src: /tmp/awscliv2.zip
+        dest: /tmp/
+        remote_src: true
+      when: aws_cli_check.rc != 0
+
+    - name: Install AWS CLI v2
+      ansible.builtin.command: /tmp/aws/install
+      when: aws_cli_check.rc != 0
+
+    - name: Clean up AWS CLI installer files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/awscliv2.zip
+        - /tmp/aws
+      when: aws_cli_check.rc != 0
+
+    - name: Download certbot backup from Contabo S3
+      ansible.builtin.shell: |
+        AWS_ACCESS_KEY_ID="{{ s3_access_key }}" \
+        AWS_SECRET_ACCESS_KEY="{{ s3_secret_key }}" \
+        aws s3 cp s3://{{ s3_bucket }}/certbot_latest.tar.gz /tmp/certbot_latest.tar.gz \
+          --endpoint-url https://usc1.contabostorage.com
+      no_log: false
+      changed_when: true
+
+    - name: Verify backup file was downloaded
+      ansible.builtin.stat:
+        path: /tmp/certbot_latest.tar.gz
+      register: backup_file
+      failed_when: not backup_file.stat.exists or backup_file.stat.size == 0
+
+    - name: Display backup file info
+      ansible.builtin.debug:
+        msg: "Backup file downloaded: {{ backup_file.stat.size }} bytes"
+
+    - name: Create certbot data directory if it doesn't exist
+      ansible.builtin.file:
+        path: "{{ certbot_data_path }}"
+        state: directory
+        mode: '0755'
+
+    - name: Backup existing certbot directory (if exists)
+      ansible.builtin.shell: |
+        if [ -d "{{ certbot_data_path }}/certbot" ]; then
+          mv {{ certbot_data_path }}/certbot {{ certbot_data_path }}/certbot.backup.$(date +%Y%m%d_%H%M%S)
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Test backup file integrity
+      ansible.builtin.shell: tar -tzf /tmp/certbot_latest.tar.gz > /dev/null
+      register: integrity_check
+      changed_when: false
+      failed_when: integrity_check.rc != 0
+
+    - name: Extract certbot data from backup
+      ansible.builtin.shell: |
+        cd {{ certbot_data_path }} && \
+        tar -xzf /tmp/certbot_latest.tar.gz
+      register: extract_result
+      changed_when: true
+
+    - name: Display extraction completion
+      ansible.builtin.debug:
+        msg: "Certbot data extracted successfully"
+
+    - name: Verify certbot directory exists
+      ansible.builtin.stat:
+        path: "{{ certbot_data_path }}/certbot"
+      register: certbot_dir
+      failed_when: not certbot_dir.stat.exists or not certbot_dir.stat.isdir
+
+    - name: Display certbot directory status
+      ansible.builtin.debug:
+        msg: "Certbot data verified at {{ certbot_data_path }}/certbot"
+
+    - name: Check for certificates in restored backup
+      ansible.builtin.shell: |
+        if [ -d "{{ certbot_data_path }}/certbot/conf/live" ]; then
+          ls -1 {{ certbot_data_path }}/certbot/conf/live | grep -v README | wc -l
+        else
+          echo "0"
+        fi
+      register: cert_count
+      changed_when: false
+
+    - name: Display certificate count
+      ansible.builtin.debug:
+        msg: "Found {{ cert_count.stdout }} certificate(s) in backup"
+
+    - name: Clean up temporary backup file
+      ansible.builtin.file:
+        path: /tmp/certbot_latest.tar.gz
+        state: absent
+
+    - name: Display final status
+      ansible.builtin.debug:
+        msg:
+          - "====================================="
+          - "Certbot restore completed!"
+          - "====================================="
+          - ""
+          - "Manual verification steps:"
+          - "1. Check certificate files: ls -la {{ certbot_data_path }}/certbot/conf/live/"
+          - "2. Verify nginx can access certificates"
+          - "3. Test HTTPS connections to your domains"
+          - ""
+          - "Note: Previous certbot directory (if any) was backed up with timestamp suffix"
+          - "Note: You may need to reload nginx to pick up the restored certificates"
