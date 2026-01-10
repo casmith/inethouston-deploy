@@ -1,0 +1,36 @@
+- name: Deploy nginx reverse proxy with certbot via Docker
+  hosts: web01
+  become: true
+  tasks:
+
+    - name: Creates directory
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - /home/ubuntu/deploy/nginx
+        - /home/ubuntu/deploy/nginx/data
+        - /home/ubuntu/deploy/nginx/data/nginx
+        - /home/ubuntu/deploy/nginx/data/certbot
+        - /home/ubuntu/deploy/nginx/data/certbot/conf
+        - /home/ubuntu/deploy/nginx/data/certbot/www
+
+    - name: Create shared Docker network
+      community.docker.docker_network:
+        name: shared
+        state: present
+
+    - name: Copy Docker Compose files
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/home/ubuntu/deploy/nginx/{{ item }}"
+        mode: "0644"
+      loop:
+        - docker-compose.yaml
+
+    - name: Deploy with docker compose
+      ansible.builtin.shell:
+        cmd: "docker compose up -d"
+        chdir: /home/ubuntu/deploy/nginx
+      register: compose_up_result

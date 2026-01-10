@@ -4,11 +4,14 @@ services:
     image: casmith/beoftexas:2026.01.07.f1252219
     secrets:
      - beoftexas_db_pw
-    ports:
-     - 8000:8000
+    networks:
+      shared:
+        aliases:
+          - beoftexas-web
+      default:
     environment:
       DB_NAME: beoftexas
-      DB_HOST: work_db_1
+      DB_HOST: beoftexas-mariadb-1
       DB_USER: beoftexas
       DB_PASSWORD_FILE: /run/secrets/beoftexas_db_pw
       STRAPI_URL: https://strapi.beoftexas.com
@@ -59,3 +62,6 @@ secrets:
     file: ./beoftexas_db_root_pw.txt
   beoftexas_db_pw:
     file: ./beoftexas_db_pw.txt
+networks:
+  shared:
+    external: true

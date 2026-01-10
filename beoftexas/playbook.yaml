@@ -16,6 +16,10 @@
         - /root/beoftexas/strapi
         - /root/beoftexas/strapi/scripts
 
+    - name: Create shared Docker network
+      community.docker.docker_network:
+        name: shared
+        state: present
 
     - name: Copy secrets
       ansible.builtin.copy:
