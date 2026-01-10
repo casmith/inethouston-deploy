@@ -1,0 +1,122 @@
+---
+- name: Bootstrap new server with ubuntu user and SSH keys
+  hosts: all
+  gather_facts: true
+  remote_user: root
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    # SSH public key paths (relative to playbook)
+    admin_ssh_key: "{{ lookup('file', 'keys/admin_key.pub') }}"
+    github_actions_ssh_key: "{{ lookup('file', 'keys/github_actions_key.pub') }}"
+
+  tasks:
+    - name: Ensure ubuntu user exists
+      ansible.builtin.user:
+        name: ubuntu
+        shell: /bin/bash
+        groups: sudo
+        append: true
+        create_home: true
+        state: present
+
+    - name: Set disabled password for ubuntu (prevents password login but allows SSH keys)
+      ansible.builtin.command: usermod -p '*' ubuntu
+      changed_when: true
+
+    - name: Ensure .ssh directory exists for root
+      ansible.builtin.file:
+        path: /root/.ssh
+        state: directory
+        mode: "0700"
+        owner: root
+        group: root
+
+    - name: Ensure .ssh directory exists for ubuntu
+      ansible.builtin.file:
+        path: /home/ubuntu/.ssh
+        state: directory
+        mode: "0700"
+        owner: ubuntu
+        group: ubuntu
+
+    - name: Add admin SSH key to root user
+      ansible.builtin.lineinfile:
+        path: /root/.ssh/authorized_keys
+        line: "{{ admin_ssh_key }}"
+        create: true
+        mode: "0600"
+        owner: root
+        group: root
+
+    - name: Add admin SSH key to ubuntu user
+      ansible.builtin.lineinfile:
+        path: /home/ubuntu/.ssh/authorized_keys
+        line: "{{ admin_ssh_key }}"
+        create: true
+        mode: "0600"
+        owner: ubuntu
+        group: ubuntu
+
+    - name: Add GitHub Actions SSH key to ubuntu user
+      ansible.builtin.lineinfile:
+        path: /home/ubuntu/.ssh/authorized_keys
+        line: "{{ github_actions_ssh_key }}"
+        create: true
+        mode: "0600"
+        owner: ubuntu
+        group: ubuntu
+
+    - name: Configure passwordless sudo for ubuntu user
+      ansible.builtin.lineinfile:
+        path: /etc/sudoers.d/ubuntu
+        line: "ubuntu ALL=(ALL) NOPASSWD:ALL"
+        create: true
+        mode: "0440"
+        validate: "/usr/sbin/visudo -cf %s"
+
+    - name: Remove cloud-init SSH override (prevents password auth override)
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+        state: absent
+      notify: Restart SSH
+
+    - name: Disable password authentication for SSH
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?PasswordAuthentication"
+        line: "PasswordAuthentication no"
+        state: present
+      notify: Restart SSH
+
+    - name: Disable challenge-response authentication
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?ChallengeResponseAuthentication"
+        line: "ChallengeResponseAuthentication no"
+        state: present
+      notify: Restart SSH
+
+    - name: Disable PAM authentication
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?UsePAM"
+        line: "UsePAM no"
+        state: present
+      notify: Restart SSH
+
+    - name: Disable root password authentication (but allow key-based)
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?PermitRootLogin"
+        line: "PermitRootLogin prohibit-password"
+        state: present
+      notify: Restart SSH
+
+    - name: Force handlers to run now
+      ansible.builtin.meta: flush_handlers
+
+  handlers:
+    - name: Restart SSH
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
