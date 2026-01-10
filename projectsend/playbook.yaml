@@ -1,25 +1,32 @@
 - name: Deploy ProjectSend
   hosts: web01
   become: yes
-  vars: 
+  vars:
     project_name: projectsend
-    root_dir: /root/projectsend
+    root_dir: /home/ubuntu/deploy/projectsend
   tasks:
     - name: Creates directory
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory
       loop:
-        - "{{ root_dir }}/secret"
+        - /home/ubuntu/deploy
+        - "{{ root_dir }}"
+        - "{{ root_dir }}/secrets"
         - "{{ root_dir }}/data"
         - "{{ root_dir }}/data/mariadb"
         - "{{ root_dir }}/data/web"
         - "{{ root_dir }}/data/config"
 
+    - name: Create shared Docker network
+      community.docker.docker_network:
+        name: shared
+        state: present
+
     - name: copy secrets
       copy:
         src: "../secret/{{ item }}"
-        dest: "{{ root_dir }}/secret/{{ item }}"
+        dest: "{{ root_dir }}/secrets/{{ item }}"
       loop:
         - "{{ project_name }}_db_pw.txt"
         - "{{ project_name }}_db_root_pw.txt"
@@ -31,12 +38,19 @@
       loop:
       - docker-compose.yaml
 
-    - name: Create and start services
-      community.docker.docker_compose_v2:
-        project_src: "{{ root_dir }}"
-        project_name: "{{ project_name }}"
-        remove_orphans: true
-      register: output
+    - name: Deploy with docker compose
+      ansible.builtin.shell:
+        cmd: "docker compose up -d"
+        chdir: "{{ root_dir }}"
+      register: compose_up_result
+
+    - name: Restart nginx to pick up projectsend on shared network
+      ansible.builtin.shell:
+        cmd: "docker compose restart web"
+        chdir: /home/ubuntu/deploy/nginx
+      register: nginx_restart_result
+      failed_when: false
+      changed_when: nginx_restart_result.rc == 0
 
     # - name: copy scripts
     #   copy:

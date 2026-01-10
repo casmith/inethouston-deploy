@@ -4,7 +4,7 @@
   gather_facts: false
   become: true
   vars:
-    deploy_path: /home/ubuntu/deploy/beoftexas
+    deploy_path: /home/ubuntu/deploy/strapi
     s3_access_key: "{{ lookup('env', 'CONTABO_S3_ACCESS_KEY') }}"
     s3_secret_key: "{{ lookup('env', 'CONTABO_S3_SECRET_KEY') }}"
     s3_bucket: "{{ lookup('env', 'CONTABO_S3_BUCKET') | default('beoftexas-backup', true) }}"
@@ -70,7 +70,7 @@
     - name: Stop Strapi service
       ansible.builtin.shell: |
         cd {{ deploy_path }} && \
-        docker compose stop strapi
+        docker compose stop web
       register: stop_result
       changed_when: true
 
@@ -117,7 +117,7 @@
     - name: Restart Strapi service
       ansible.builtin.shell: |
         cd {{ deploy_path }} && \
-        docker compose start strapi
+        docker compose start web
       register: start_result
       changed_when: true
 

@@ -1,4 +1,4 @@
-- name: Deploy Benefit Elect of Texas website via Docker
+- name: Deploy WBA of Texas website via Docker
   hosts: web01
   become: true
   tasks:
@@ -13,32 +13,38 @@
         state: directory
       loop:
         - /home/ubuntu/deploy
-        - /home/ubuntu/deploy/beoftexas
-        - /home/ubuntu/deploy/beoftexas/data
-        - /home/ubuntu/deploy/beoftexas/secrets
+        - /home/ubuntu/deploy/wbaoftexas
+        - /home/ubuntu/deploy/wbaoftexas/data
+        - /home/ubuntu/deploy/wbaoftexas/data/mariadb
+        - /home/ubuntu/deploy/wbaoftexas/secrets
+
+    - name: Create shared Docker network
+      community.docker.docker_network:
+        name: shared
+        state: present
 
     - name: copy Docker Compose files
       copy:
         src: "{{ item }}"
-        dest: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/beoftexas/{{ item }}"
+        dest: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/wbaoftexas/{{ item }}"
       loop:
       - docker-compose.yaml
 
     - name: copy secrets
       copy:
         src: "../secret/{{ item }}"
-        dest: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/beoftexas/secrets/{{ item }}"
+        dest: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/wbaoftexas/secrets/{{ item }}"
       loop:
-      - beoftexas_db_pw.txt
-      - beoftexas_db_root_pw.txt
+      - wbaoftexas_db_pw.txt
+      - wbaoftexas_db_root_pw.txt
 
     - name: Deploy with docker compose
       ansible.builtin.shell:
-        cmd: "docker compose up -d"
-        chdir: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/beoftexas/"
+        cmd: "export WBAOFTEXAS_DB_PASS=$(cat secrets/wbaoftexas_db_pw.txt) && docker compose up -d"
+        chdir: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/wbaoftexas/"
       register: compose_up_result
 
-    - name: Restart nginx to pick up beoftexas on shared network
+    - name: Restart nginx to pick up wbaoftexas on shared network
       ansible.builtin.shell:
         cmd: "docker compose restart web"
         chdir: /home/ubuntu/deploy/nginx

@@ -1,0 +1,238 @@
+---
+- name: Restore ProjectSend database and files from S3 backup
+  hosts: web01
+  gather_facts: false
+  become: true
+  vars:
+    deploy_path: /home/ubuntu/deploy/projectsend
+    s3_access_key: "{{ lookup('env', 'CONTABO_S3_ACCESS_KEY') }}"
+    s3_secret_key: "{{ lookup('env', 'CONTABO_S3_SECRET_KEY') }}"
+    s3_bucket: "{{ lookup('env', 'CONTABO_S3_BUCKET') | default('beoftexas-backup', true) }}"
+    db_root_pw_file: "{{ deploy_path }}/secrets/projectsend_db_root_pw.txt"
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install unzip utility
+      ansible.builtin.apt:
+        name: unzip
+        state: present
+
+    - name: Check if AWS CLI is already installed
+      ansible.builtin.command: aws --version
+      register: aws_cli_check
+      changed_when: false
+      failed_when: false
+
+    - name: Download AWS CLI v2 installer
+      ansible.builtin.get_url:
+        url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+        dest: /tmp/awscliv2.zip
+        mode: '0644'
+      when: aws_cli_check.rc != 0
+
+    - name: Unzip AWS CLI installer
+      ansible.builtin.unarchive:
+        src: /tmp/awscliv2.zip
+        dest: /tmp/
+        remote_src: true
+      when: aws_cli_check.rc != 0
+
+    - name: Install AWS CLI v2
+      ansible.builtin.command: /tmp/aws/install
+      when: aws_cli_check.rc != 0
+
+    - name: Clean up AWS CLI installer files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/awscliv2.zip
+        - /tmp/aws
+      when: aws_cli_check.rc != 0
+
+    # Database restore
+    - name: Download projectsend database backup from Contabo S3
+      ansible.builtin.shell: |
+        AWS_ACCESS_KEY_ID="{{ s3_access_key }}" \
+        AWS_SECRET_ACCESS_KEY="{{ s3_secret_key }}" \
+        aws s3 cp s3://{{ s3_bucket }}/projectsend_latest.sql.gz /tmp/projectsend_latest.sql.gz \
+          --endpoint-url https://usc1.contabostorage.com
+      no_log: false
+      changed_when: true
+
+    - name: Verify database backup file was downloaded
+      ansible.builtin.stat:
+        path: /tmp/projectsend_latest.sql.gz
+      register: db_backup_file
+      failed_when: not db_backup_file.stat.exists or db_backup_file.stat.size == 0
+
+    - name: Display database backup file info
+      ansible.builtin.debug:
+        msg: "Database backup file downloaded: {{ db_backup_file.stat.size }} bytes"
+
+    - name: Decompress database backup file
+      ansible.builtin.shell: gunzip -f /tmp/projectsend_latest.sql.gz
+      register: decompress_result
+      changed_when: true
+
+    - name: Verify decompressed SQL file exists
+      ansible.builtin.stat:
+        path: /tmp/projectsend_latest.sql
+      register: sql_file
+      failed_when: not sql_file.stat.exists
+
+    - name: Wait for MariaDB to be ready
+      ansible.builtin.shell: |
+        cd {{ deploy_path }} && \
+        docker compose exec -T db mariadb -u root -p$(cat {{ db_root_pw_file }}) -e "SELECT 1" 2>&1
+      register: db_ready
+      until: db_ready.rc == 0
+      retries: 30
+      delay: 2
+      changed_when: false
+      no_log: false
+
+    - name: Drop existing projectsend database
+      ansible.builtin.shell: |
+        cd {{ deploy_path }} && \
+        docker compose exec -T db mariadb -u root -p$(cat {{ db_root_pw_file }}) -e "DROP DATABASE IF EXISTS projectsend;"
+      register: drop_result
+      changed_when: true
+      no_log: true
+
+    - name: Create fresh projectsend database
+      ansible.builtin.shell: |
+        cd {{ deploy_path }} && \
+        docker compose exec -T db mariadb -u root -p$(cat {{ db_root_pw_file }}) -e "CREATE DATABASE projectsend;"
+      register: create_result
+      changed_when: true
+      no_log: true
+
+    - name: Restore projectsend database from backup
+      ansible.builtin.shell: |
+        cd {{ deploy_path }} && \
+        docker compose exec -T db mariadb -u root -p$(cat {{ db_root_pw_file }}) projectsend < /tmp/projectsend_latest.sql
+      register: restore_result
+      changed_when: true
+      no_log: true
+
+    - name: Display database restore completion
+      ansible.builtin.debug:
+        msg: "Database restored successfully"
+
+    - name: Clean up temporary SQL file
+      ansible.builtin.file:
+        path: /tmp/projectsend_latest.sql
+        state: absent
+
+    # Files restore
+    - name: Download projectsend files backup from Contabo S3
+      ansible.builtin.shell: |
+        AWS_ACCESS_KEY_ID="{{ s3_access_key }}" \
+        AWS_SECRET_ACCESS_KEY="{{ s3_secret_key }}" \
+        aws s3 cp s3://{{ s3_bucket }}/projectsend_files_latest.tar.gz /tmp/projectsend_files_latest.tar.gz \
+          --endpoint-url https://usc1.contabostorage.com
+      no_log: false
+      changed_when: true
+
+    - name: Verify files backup was downloaded
+      ansible.builtin.stat:
+        path: /tmp/projectsend_files_latest.tar.gz
+      register: files_backup_file
+      failed_when: not files_backup_file.stat.exists or files_backup_file.stat.size == 0
+
+    - name: Display files backup info
+      ansible.builtin.debug:
+        msg: "Files backup downloaded: {{ files_backup_file.stat.size }} bytes"
+
+    - name: Backup existing config directory (if exists)
+      ansible.builtin.shell: |
+        if [ -d "{{ deploy_path }}/data/config" ]; then
+          mv {{ deploy_path }}/data/config {{ deploy_path }}/data/config.backup.$(date +%Y%m%d_%H%M%S)
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Backup existing web directory (if exists)
+      ansible.builtin.shell: |
+        if [ -d "{{ deploy_path }}/data/web" ]; then
+          mv {{ deploy_path }}/data/web {{ deploy_path }}/data/web.backup.$(date +%Y%m%d_%H%M%S)
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Test backup file integrity
+      ansible.builtin.shell: tar -tzf /tmp/projectsend_files_latest.tar.gz > /dev/null
+      register: integrity_check
+      changed_when: false
+      failed_when: integrity_check.rc != 0
+
+    - name: Extract projectsend files from backup
+      ansible.builtin.shell: |
+        cd {{ deploy_path }}/data && \
+        tar -xzf /tmp/projectsend_files_latest.tar.gz
+      register: extract_result
+      changed_when: true
+
+    - name: Display extraction completion
+      ansible.builtin.debug:
+        msg: "Files extracted successfully to {{ deploy_path }}/data"
+
+    - name: Verify config directory exists
+      ansible.builtin.stat:
+        path: "{{ deploy_path }}/data/config"
+      register: config_dir
+      failed_when: not config_dir.stat.exists or not config_dir.stat.isdir
+
+    - name: Verify web directory exists
+      ansible.builtin.stat:
+        path: "{{ deploy_path }}/data/web"
+      register: web_dir
+      failed_when: not web_dir.stat.exists or not web_dir.stat.isdir
+
+    - name: Set correct ownership on restored files
+      ansible.builtin.file:
+        path: "{{ deploy_path }}/data/{{ item }}"
+        owner: "1000"
+        group: "1000"
+        recurse: true
+      loop:
+        - config
+        - web
+
+    - name: Clean up temporary files backup
+      ansible.builtin.file:
+        path: /tmp/projectsend_files_latest.tar.gz
+        state: absent
+
+    - name: Restart ProjectSend containers to pick up restored files
+      ansible.builtin.shell:
+        cmd: "docker compose restart"
+        chdir: "{{ deploy_path }}"
+      register: restart_result
+      changed_when: true
+
+    - name: Display final status
+      ansible.builtin.debug:
+        msg:
+          - "====================================="
+          - "ProjectSend restore completed!"
+          - "====================================="
+          - ""
+          - "Database: projectsend (MariaDB)"
+          - "Files restored to:"
+          - "  - {{ deploy_path }}/data/config"
+          - "  - {{ deploy_path }}/data/web"
+          - ""
+          - "Manual verification steps:"
+          - "1. Check ProjectSend web interface"
+          - "2. Verify files are accessible"
+          - "3. Test user login"
+          - ""
+          - "Note: Previous directories (if any) were backed up with timestamp suffix"

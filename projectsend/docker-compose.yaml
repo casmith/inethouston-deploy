@@ -15,6 +15,11 @@ services:
   web:
     image: lscr.io/linuxserver/projectsend:latest
     restart: always
+    networks:
+      shared:
+        aliases:
+          - projectsend-web
+      default:
     environment:
       - PUID=1000
       - PGID=1000
@@ -22,12 +27,13 @@ services:
     volumes:
       - ./data/config:/config
       - ./data/web:/data
+    depends_on:
+      - db
 networks:
-   default:
-    name: work_default
+  shared:
     external: true
 secrets:
   projectsend_db_root_pw:
-    file: ./secret/projectsend_db_root_pw.txt
+    file: ./secrets/projectsend_db_root_pw.txt
   projectsend_db_pw:
-    file: ./secret/projectsend_db_pw.txt
+    file: ./secrets/projectsend_db_pw.txt

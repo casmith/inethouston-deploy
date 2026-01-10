@@ -1,0 +1,39 @@
+name: strapi
+services:
+  web:
+    image: casmith/strapi:latest
+    environment:
+      DATABASE_CLIENT: postgres
+      DATABASE_NAME: strapi
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USERNAME: strapi
+    networks:
+      shared:
+        aliases:
+          - strapi-web
+      default:
+    volumes:
+      - ./app:/srv/app
+    secrets:
+      - strapi_db_pw
+    depends_on:
+      - postgres
+    restart: always
+  postgres:
+    image: postgres
+    environment:
+      POSTGRES_DB: strapi
+      POSTGRES_USER: strapi
+      POSTGRES_PASSWORD_FILE: /run/secrets/strapi_db_pw
+    volumes:
+      - ./postgres:/var/lib/postgresql
+    secrets:
+      - strapi_db_pw
+    restart: always
+secrets:
+  strapi_db_pw:
+    file: ./secrets/strapi_db_pw.txt
+networks:
+  shared:
+    external: true

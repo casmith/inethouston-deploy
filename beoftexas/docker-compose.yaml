@@ -15,33 +15,35 @@ services:
       DB_USER: beoftexas
       DB_PASSWORD_FILE: /run/secrets/beoftexas_db_pw
       STRAPI_URL: https://strapi.beoftexas.com
-    restart: always
-  strapi:
-    image: naskio/strapi:4.25.11
-    environment:
-      DATABASE_CLIENT: postgres
-      DATABASE_NAME: strapi
-      DATABASE_HOST: postgres
-      DATABASE_PORT: 5432
-      DATABASE_USERNAME: strapi
-    volumes:
-      - ./app:/srv/app
-    secrets:
-      - strapi_db_pw
     depends_on:
-      - postgres
+      - mariadb
     restart: always
-  postgres:
-    image: postgres
-    environment:
-      POSTGRES_DB: strapi
-      POSTGRES_USER: strapi
-      POSTGRES_PASSWORD_FILE: /run/secrets/strapi_db_pw
-    volumes:
-      - ./postgres:/var/lib/postgresql
-    secrets:
-      - strapi_db_pw
-    restart: always
+#  strapi:
+#    image: naskio/strapi:4.25.11
+#    environment:
+#      DATABASE_CLIENT: postgres
+#      DATABASE_NAME: strapi
+#      DATABASE_HOST: postgres
+#      DATABASE_PORT: 5432
+#      DATABASE_USERNAME: strapi
+#    volumes:
+#      - ./app:/srv/app
+#    secrets:
+#      - strapi_db_pw
+#    depends_on:
+#      - postgres
+#    restart: always
+#  postgres:
+#    image: postgres
+#    environment:
+#      POSTGRES_DB: strapi
+#      POSTGRES_USER: strapi
+#      POSTGRES_PASSWORD_FILE: /run/secrets/strapi_db_pw
+#    volumes:
+#      - ./postgres:/var/lib/postgresql
+#    secrets:
+#      - strapi_db_pw
+#    restart: always
   mariadb:
     image: mariadb
     restart: always
@@ -54,14 +56,14 @@ services:
       MYSQL_USER: beoftexas
       MYSQL_PASSWORD_FILE: /run/secrets/beoftexas_db_pw
     volumes:
-     - ./mariadb/data:/var/lib/mysql
+     - ./data/mariadb/data:/var/lib/mysql
 secrets:
   strapi_db_pw:
-    file: ./strapi_db_pw.txt
+    file: ./secrets/strapi_db_pw.txt
   beoftexas_db_root_pw:
-    file: ./beoftexas_db_root_pw.txt
+    file: ./secrets/beoftexas_db_root_pw.txt
   beoftexas_db_pw:
-    file: ./beoftexas_db_pw.txt
+    file: ./secrets/beoftexas_db_pw.txt
 networks:
   shared:
     external: true

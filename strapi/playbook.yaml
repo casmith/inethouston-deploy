@@ -1,4 +1,4 @@
-- name: Deploy Benefit Elect of Texas website via Docker
+- name: Deploy Strapi via Docker
   hosts: web01
   become: true
   tasks:
@@ -13,32 +13,36 @@
         state: directory
       loop:
         - /home/ubuntu/deploy
-        - /home/ubuntu/deploy/beoftexas
-        - /home/ubuntu/deploy/beoftexas/data
-        - /home/ubuntu/deploy/beoftexas/secrets
+        - /home/ubuntu/deploy/strapi
+        - /home/ubuntu/deploy/strapi/data
+        - /home/ubuntu/deploy/strapi/secrets
+
+    - name: Create shared Docker network
+      community.docker.docker_network:
+        name: shared
+        state: present
 
     - name: copy Docker Compose files
       copy:
         src: "{{ item }}"
-        dest: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/beoftexas/{{ item }}"
+        dest: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/strapi/{{ item }}"
       loop:
       - docker-compose.yaml
 
     - name: copy secrets
       copy:
         src: "../secret/{{ item }}"
-        dest: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/beoftexas/secrets/{{ item }}"
+        dest: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/strapi/secrets/{{ item }}"
       loop:
-      - beoftexas_db_pw.txt
-      - beoftexas_db_root_pw.txt
+      - strapi_db_pw.txt
 
     - name: Deploy with docker compose
       ansible.builtin.shell:
         cmd: "docker compose up -d"
-        chdir: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/beoftexas/"
+        chdir: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/strapi/"
       register: compose_up_result
 
-    - name: Restart nginx to pick up beoftexas on shared network
+    - name: Restart nginx to pick up strapi on shared network
       ansible.builtin.shell:
         cmd: "docker compose restart web"
         chdir: /home/ubuntu/deploy/nginx

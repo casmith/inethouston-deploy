@@ -1,0 +1,38 @@
+name: wbaoftexas
+services:
+  web:
+    image: casmith/wbaoftexas:2024.12.15.084d7de9
+    networks:
+      shared:
+        aliases:
+          - wbaoftexas-web
+      default:
+    environment:
+      DB_NAME: wbaoftexas
+      DB_HOST: wbaoftexas-mariadb-1
+      DB_USER: wbaoftexas
+      DB_PASS: ${WBAOFTEXAS_DB_PASS}
+    depends_on:
+      - mariadb
+    restart: always
+  mariadb:
+    image: mariadb
+    restart: always
+    secrets:
+     - wbaoftexas_db_root_pw
+     - wbaoftexas_db_pw
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/wbaoftexas_db_root_pw
+      MYSQL_DATABASE: wbaoftexas
+      MYSQL_USER: wbaoftexas
+      MYSQL_PASSWORD_FILE: /run/secrets/wbaoftexas_db_pw
+    volumes:
+     - ./data/mariadb/data:/var/lib/mysql
+secrets:
+  wbaoftexas_db_root_pw:
+    file: ./secrets/wbaoftexas_db_root_pw.txt
+  wbaoftexas_db_pw:
+    file: ./secrets/wbaoftexas_db_pw.txt
+networks:
+  shared:
+    external: true

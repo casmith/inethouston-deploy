@@ -16,10 +16,10 @@
     - name: Verify Ubuntu version
       ansible.builtin.assert:
         that:
-          - ansible_distribution == "Ubuntu"
-          - ansible_distribution_version is version('24.04', '>=')
+          - ansible_facts["distribution"] == "Ubuntu"
+          - ansible_facts["distribution_version"] is version('24.04', '>=')
         fail_msg: "This playbook is designed for Ubuntu 24.04 or later"
-        success_msg: "Running on Ubuntu {{ ansible_distribution_version }}"
+        success_msg: "Running on Ubuntu {{ ansible_facts['distribution_version'] }}"
       when: docker_installed.rc != 0
 
     - name: Update apt cache
@@ -62,7 +62,7 @@
         content: |
           Types: deb
           URIs: https://download.docker.com/linux/ubuntu
-          Suites: {{ ansible_distribution_release }}
+          Suites: {{ ansible_facts['distribution_release'] }}
           Components: stable
           Signed-By: /etc/apt/keyrings/docker.asc
         mode: '0644'
@@ -188,7 +188,6 @@
 
     - name: Reset SSH connection to apply group changes
       ansible.builtin.meta: reset_connection
-      when: ansible_user is defined
 
     - name: Remind about logout requirement
       ansible.builtin.debug:

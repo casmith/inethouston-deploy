@@ -10,6 +10,19 @@
     github_actions_ssh_key: "{{ lookup('file', 'keys/github_actions_key.pub') }}"
 
   tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install essential packages
+      ansible.builtin.apt:
+        name:
+          - unzip
+          - curl
+          - wget
+        state: present
+
     - name: Ensure ubuntu user exists
       ansible.builtin.user:
         name: ubuntu

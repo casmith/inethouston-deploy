@@ -29,8 +29,22 @@
       loop:
         - docker-compose.yaml
 
+    - name: Copy all nginx config files from conf directory
+      ansible.builtin.copy:
+        src: "conf/"
+        dest: "/home/ubuntu/deploy/nginx/data/nginx/"
+        mode: "0644"
+
     - name: Deploy with docker compose
       ansible.builtin.shell:
         cmd: "docker compose up -d"
         chdir: /home/ubuntu/deploy/nginx
       register: compose_up_result
+
+    - name: Gracefully reload nginx to apply config changes
+      ansible.builtin.shell:
+        cmd: "docker compose exec web nginx -s reload"
+        chdir: /home/ubuntu/deploy/nginx
+      register: nginx_reload_result
+      failed_when: false
+      changed_when: nginx_reload_result.rc == 0
