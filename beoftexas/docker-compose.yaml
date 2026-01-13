@@ -1,7 +1,7 @@
 name: beoftexas
 services:
   web:
-    image: casmith/beoftexas:2026.01.07.f1252219
+    image: casmith/beoftexas:2026.01.13.d8ed1ab1
     secrets:
      - beoftexas_db_pw
     networks:
