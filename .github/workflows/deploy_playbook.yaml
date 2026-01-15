@@ -40,3 +40,4 @@ jobs:
           ansible-playbook -i hosts.yaml playbook.yaml --private-key private_key.pem -u ${{ secrets.ANSIBLE_USER }}
           ansible-playbook -i hosts.yaml beoftexas/playbook.yaml --private-key private_key.pem -u ${{ secrets.ANSIBLE_USER }}
           ansible-playbook -i hosts.yaml projectsend/playbook.yaml --private-key private_key.pem -u ${{ secrets.ANSIBLE_USER }}
+          ansible-playbook -i hosts.yaml backup/playbook.yaml --private-key private_key.pem -u ${{ secrets.ANSIBLE_USER }}
