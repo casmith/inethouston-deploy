@@ -1,0 +1,58 @@
+---
+- name: Deploy backup infrastructure
+  hosts: web01
+  become: true
+  vars:
+    deploy_dir: /home/ubuntu/deploy
+    backup_dir: "{{ deploy_dir }}/backup"
+
+  tasks:
+    - name: Create backup directory
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+
+    - name: Deploy backup script
+      copy:
+        src: backup-all-dbs.sh
+        dest: "{{ backup_dir }}/backup-all-dbs.sh"
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+
+    - name: Ensure AWS CLI v2 is installed
+      block:
+        - name: Check if AWS CLI is installed
+          command: aws --version
+          register: aws_version
+          changed_when: false
+          failed_when: false
+
+        - name: Download AWS CLI v2
+          get_url:
+            url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+            dest: /tmp/awscliv2.zip
+          when: aws_version.rc != 0
+
+        - name: Unzip AWS CLI
+          unarchive:
+            src: /tmp/awscliv2.zip
+            dest: /tmp
+            remote_src: yes
+          when: aws_version.rc != 0
+
+        - name: Install AWS CLI
+          command: /tmp/aws/install
+          when: aws_version.rc != 0
+
+        - name: Cleanup AWS CLI installer
+          file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /tmp/awscliv2.zip
+            - /tmp/aws
+          when: aws_version.rc != 0
