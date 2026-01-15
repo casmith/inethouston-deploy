@@ -16,6 +16,20 @@ rm -rf $WORK_DIR/*
 
 echo "=== Starting database backups at $(date) ==="
 
+# Function to upload a backup to S3
+upload_backup() {
+    local file=$1
+    local output_name=$2
+
+    # Upload timestamped version
+    echo "  -> Uploading ${output_name}_${TIMESTAMP}.sql.gz"
+    aws --endpoint-url "$S3_ENDPOINT" s3 cp "$file" "s3://$S3_BUCKET/${output_name}_${TIMESTAMP}.sql.gz"
+
+    # Upload as "latest"
+    echo "  -> Uploading ${output_name}_latest.sql.gz"
+    aws --endpoint-url "$S3_ENDPOINT" s3 cp "$file" "s3://$S3_BUCKET/${output_name}_latest.sql.gz"
+}
+
 # Function to backup PostgreSQL database
 backup_postgres() {
     local db_name=$1
@@ -26,6 +40,9 @@ backup_postgres() {
     local output_name=$6
 
     echo "Backing up PostgreSQL database: $db_name"
+
+    # Clean staging area
+    rm -rf $WORK_DIR/*
 
     local db_pass=$(cat "$password_file")
 
@@ -38,11 +55,10 @@ backup_postgres() {
         --network "$network" \
         casmith/pgsqldump
 
-    # Rename to standard name and create latest copy
-    mv $WORK_DIR/*.sql.gz $WORK_DIR/${output_name}_${TIMESTAMP}.sql.gz
-    cp $WORK_DIR/${output_name}_${TIMESTAMP}.sql.gz $WORK_DIR/${output_name}_latest.sql.gz
+    # Upload immediately
+    upload_backup "$WORK_DIR"/*.sql.gz "$output_name"
 
-    echo "  -> Created ${output_name}_${TIMESTAMP}.sql.gz"
+    echo "  -> Completed ${output_name}"
 }
 
 # Function to backup MariaDB/MySQL database
@@ -56,6 +72,9 @@ backup_mariadb() {
 
     echo "Backing up MariaDB database: $db_name"
 
+    # Clean staging area
+    rm -rf $WORK_DIR/*
+
     local db_pass=$(cat "$password_file")
 
     docker run --rm \
@@ -67,20 +86,10 @@ backup_mariadb() {
         --network "$network" \
         casmith/mysqldump
 
-    # Rename to standard name and create latest copy
-    mv $WORK_DIR/*.sql.gz $WORK_DIR/${output_name}_${TIMESTAMP}.sql.gz
-    cp $WORK_DIR/${output_name}_${TIMESTAMP}.sql.gz $WORK_DIR/${output_name}_latest.sql.gz
+    # Upload immediately
+    upload_backup "$WORK_DIR"/*.sql.gz "$output_name"
 
-    echo "  -> Created ${output_name}_${TIMESTAMP}.sql.gz"
-}
-
-# Function to upload to S3
-upload_to_s3() {
-    echo "Uploading backups to S3..."
-    for filename in $WORK_DIR/*.sql.gz; do
-        echo "  -> Uploading $(basename $filename)"
-        aws --endpoint-url "$S3_ENDPOINT" s3 cp "$filename" "s3://$S3_BUCKET/$(basename $filename)"
-    done
+    echo "  -> Completed ${output_name}"
 }
 
 # Backup Strapi PostgreSQL
@@ -119,10 +128,7 @@ backup_mariadb \
     "$DEPLOY_DIR/projectsend/secrets/projectsend_db_pw.txt" \
     "projectsend"
 
-# Upload all backups to S3
-upload_to_s3
-
 # Cleanup
-rm -rf $WORK_DIR/*
+rm -rf $WORK_DIR
 
 echo "=== Backup completed successfully at $(date) ==="
