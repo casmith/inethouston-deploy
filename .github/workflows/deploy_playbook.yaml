@@ -36,5 +36,5 @@ jobs:
         env:
           ANSIBLE_HOST_KEY_CHECKING: False
         run: |
-          ansible-playbook beoftexas/playbook.yaml
-          ansible-playbook wbaoftexas/playbook.yaml
+          ansible-playbook beoftexas/playbook.yaml --private-key private_key.pem
+          ansible-playbook wbaoftexas/playbook.yaml --private-key private_key.pem
