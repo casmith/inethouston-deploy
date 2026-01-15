@@ -38,3 +38,7 @@ jobs:
         run: |
           ansible-playbook beoftexas/playbook.yaml --private-key private_key.pem
           ansible-playbook wbaoftexas/playbook.yaml --private-key private_key.pem
+          ansible-playbook projectsend/playbook.yaml --private-key private_key.pem
+          ansible-playbook strapi/playbook.yaml --private-key private_key.pem
+          ansible-playbook nginx/playbook.yaml --private-key private_key.pem
+          ansible-playbook backup/playbook.yaml --private-key private_key.pem
