@@ -32,17 +32,26 @@ jobs:
           sudo apt update
           sudo apt install -y ansible
 
-      - name: Deploy beoftexas .env file before backup
+      - name: Deploy required files before backup
         env:
           SSH_USER: ${{ secrets.ANSIBLE_USER }}
           SSH_HOST: 207.244.244.247
         run: |
+          # Create directories
           ssh -o StrictHostKeyChecking=no -i private_key.pem ${SSH_USER}@${SSH_HOST} \
-            "mkdir -p /home/ubuntu/deploy/beoftexas"
+            "mkdir -p /home/ubuntu/deploy/beoftexas /home/ubuntu/deploy/backup"
+
+          # Deploy beoftexas .env file
           scp -o StrictHostKeyChecking=no -i private_key.pem \
             secret/beoftexas.env ${SSH_USER}@${SSH_HOST}:/home/ubuntu/deploy/beoftexas/.env
           ssh -o StrictHostKeyChecking=no -i private_key.pem ${SSH_USER}@${SSH_HOST} \
             "chmod 600 /home/ubuntu/deploy/beoftexas/.env"
+
+          # Deploy updated backup script
+          scp -o StrictHostKeyChecking=no -i private_key.pem \
+            backup/backup-all-dbs.sh ${SSH_USER}@${SSH_HOST}:/home/ubuntu/deploy/backup/backup-all-dbs.sh
+          ssh -o StrictHostKeyChecking=no -i private_key.pem ${SSH_USER}@${SSH_HOST} \
+            "chmod +x /home/ubuntu/deploy/backup/backup-all-dbs.sh"
 
       - name: Backup beoftexas database before deploy
         env:
