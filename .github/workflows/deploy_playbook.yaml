@@ -37,21 +37,17 @@ jobs:
           SSH_USER: ${{ secrets.ANSIBLE_USER }}
           SSH_HOST: 207.244.244.247
         run: |
-          # Create directories
+          # Create directories (with sudo since deploy dir is root-owned)
           ssh -o StrictHostKeyChecking=no -i private_key.pem ${SSH_USER}@${SSH_HOST} \
-            "mkdir -p /home/ubuntu/deploy/beoftexas /home/ubuntu/deploy/backup"
+            "sudo mkdir -p /home/ubuntu/deploy/beoftexas /home/ubuntu/deploy/backup"
 
-          # Deploy beoftexas .env file
-          scp -o StrictHostKeyChecking=no -i private_key.pem \
-            secret/beoftexas.env ${SSH_USER}@${SSH_HOST}:/home/ubuntu/deploy/beoftexas/.env
-          ssh -o StrictHostKeyChecking=no -i private_key.pem ${SSH_USER}@${SSH_HOST} \
-            "chmod 600 /home/ubuntu/deploy/beoftexas/.env"
+          # Deploy beoftexas .env file (via stdin to handle root-owned directory)
+          cat secret/beoftexas.env | ssh -o StrictHostKeyChecking=no -i private_key.pem ${SSH_USER}@${SSH_HOST} \
+            "sudo tee /home/ubuntu/deploy/beoftexas/.env > /dev/null && sudo chmod 600 /home/ubuntu/deploy/beoftexas/.env"
 
           # Deploy updated backup script
-          scp -o StrictHostKeyChecking=no -i private_key.pem \
-            backup/backup-all-dbs.sh ${SSH_USER}@${SSH_HOST}:/home/ubuntu/deploy/backup/backup-all-dbs.sh
-          ssh -o StrictHostKeyChecking=no -i private_key.pem ${SSH_USER}@${SSH_HOST} \
-            "chmod +x /home/ubuntu/deploy/backup/backup-all-dbs.sh"
+          cat backup/backup-all-dbs.sh | ssh -o StrictHostKeyChecking=no -i private_key.pem ${SSH_USER}@${SSH_HOST} \
+            "sudo tee /home/ubuntu/deploy/backup/backup-all-dbs.sh > /dev/null && sudo chmod +x /home/ubuntu/deploy/backup/backup-all-dbs.sh"
 
       - name: Backup beoftexas database before deploy
         env:
