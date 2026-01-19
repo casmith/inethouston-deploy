@@ -1,7 +1,7 @@
 name: beoftexas
 services:
   web:
-    image: casmith/beoftexas:2026.01.13.d8ed1ab1
+    image: casmith/beoftexas:2026.01.19.e21e5062
     env_file:
       - .env
     networks:
