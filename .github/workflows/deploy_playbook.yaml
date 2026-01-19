@@ -43,7 +43,7 @@ jobs:
 
           # Deploy beoftexas .env file (via stdin to handle root-owned directory)
           cat secret/beoftexas.env | ssh -o StrictHostKeyChecking=no -i private_key.pem ${SSH_USER}@${SSH_HOST} \
-            "sudo tee /home/ubuntu/deploy/beoftexas/.env > /dev/null && sudo chmod 600 /home/ubuntu/deploy/beoftexas/.env"
+            "sudo tee /home/ubuntu/deploy/beoftexas/.env > /dev/null && sudo chown ubuntu:ubuntu /home/ubuntu/deploy/beoftexas/.env && sudo chmod 600 /home/ubuntu/deploy/beoftexas/.env"
 
           # Deploy updated backup script
           cat backup/backup-all-dbs.sh | ssh -o StrictHostKeyChecking=no -i private_key.pem ${SSH_USER}@${SSH_HOST} \
