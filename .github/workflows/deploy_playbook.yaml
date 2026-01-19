@@ -32,6 +32,18 @@ jobs:
           sudo apt update
           sudo apt install -y ansible
 
+      - name: Backup beoftexas database before deploy
+        env:
+          SSH_USER: ${{ secrets.ANSIBLE_USER }}
+          SSH_HOST: 207.244.244.247
+          CONTABO_S3_ACCESS_KEY: ${{ secrets.CONTABO_S3_ACCESS_KEY }}
+          CONTABO_S3_SECRET_KEY: ${{ secrets.CONTABO_S3_SECRET_KEY }}
+        run: |
+          ssh -o StrictHostKeyChecking=no -i private_key.pem ${SSH_USER}@${SSH_HOST} \
+            "export AWS_ACCESS_KEY_ID='${CONTABO_S3_ACCESS_KEY}' && \
+             export AWS_SECRET_ACCESS_KEY='${CONTABO_S3_SECRET_KEY}' && \
+             /home/ubuntu/deploy/backup/backup-all-dbs.sh --manual --single beoftexas"
+
       - name: Run Ansible Playbook
         env:
           ANSIBLE_HOST_KEY_CHECKING: False
