@@ -64,6 +64,8 @@ jobs:
       - name: Run Ansible Playbook
         env:
           ANSIBLE_HOST_KEY_CHECKING: False
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
         run: |
           ansible-playbook beoftexas/playbook.yaml --private-key private_key.pem
           ansible-playbook wbaoftexas/playbook.yaml --private-key private_key.pem
