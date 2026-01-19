@@ -1,9 +1,9 @@
 name: beoftexas
 services:
   web:
-    image: casmith/beoftexas:2026.01.13.d8ed1ab1
-    secrets:
-     - beoftexas_db_pw
+    image: casmith/beoftexas:2026.01.19.e21e5062
+    env_file:
+      - .env
     networks:
       shared:
         aliases:
@@ -13,7 +13,6 @@ services:
       DB_NAME: beoftexas
       DB_HOST: beoftexas-mariadb-1
       DB_USER: beoftexas
-      DB_PASSWORD_FILE: /run/secrets/beoftexas_db_pw
       STRAPI_URL: https://strapi.beoftexas.com
     depends_on:
       - mariadb
@@ -47,23 +46,15 @@ services:
   mariadb:
     image: mariadb
     restart: always
-    secrets:
-     - beoftexas_db_root_pw
-     - beoftexas_db_pw
+    env_file:
+      - .env
     environment:
-      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/beoftexas_db_root_pw
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: beoftexas
       MYSQL_USER: beoftexas
-      MYSQL_PASSWORD_FILE: /run/secrets/beoftexas_db_pw
+      MYSQL_PASSWORD: ${DB_PASSWORD}
     volumes:
      - ./data/mariadb/data:/var/lib/mysql
-secrets:
-  strapi_db_pw:
-    file: ./secrets/strapi_db_pw.txt
-  beoftexas_db_root_pw:
-    file: ./secrets/beoftexas_db_root_pw.txt
-  beoftexas_db_pw:
-    file: ./secrets/beoftexas_db_pw.txt
 networks:
   shared:
     external: true
