@@ -1,22 +1,36 @@
 name: beoftexas
 services:
-  web:
-    image: casmith/beoftexas:2026.01.19.e21e5062
-    env_file:
-      - .env
+  nginx:
+    image: nginx:alpine
     networks:
       shared:
         aliases:
           - beoftexas-web
       default:
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - public_files:/var/www/html/public:ro
+    depends_on:
+      - beoftexas
+    restart: always
+
+  beoftexas:
+    image: casmith/beoftexas:2026.01.20.919c851e
+    env_file:
+      - .env
+    networks:
+      default:
     environment:
       DB_NAME: beoftexas
-      DB_HOST: beoftexas-mariadb-1
+      DB_HOST: mariadb
       DB_USER: beoftexas
       STRAPI_URL: https://strapi.beoftexas.com
+    volumes:
+      - public_files:/var/www/html/public
     depends_on:
       - mariadb
     restart: always
+
 #  strapi:
 #    image: naskio/strapi:4.25.11
 #    environment:
@@ -43,6 +57,7 @@ services:
 #    secrets:
 #      - strapi_db_pw
 #    restart: always
+
   mariadb:
     image: mariadb
     restart: always
@@ -54,7 +69,11 @@ services:
       MYSQL_USER: beoftexas
       MYSQL_PASSWORD: ${DB_PASSWORD}
     volumes:
-     - ./data/mariadb/data:/var/lib/mysql
+      - ./data/mariadb/data:/var/lib/mysql
+
+volumes:
+  public_files:
+
 networks:
   shared:
     external: true

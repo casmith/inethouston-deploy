@@ -15,6 +15,7 @@
         - /home/ubuntu/deploy
         - /home/ubuntu/deploy/beoftexas
         - /home/ubuntu/deploy/beoftexas/data
+        - /home/ubuntu/deploy/beoftexas/docker/nginx
 
     - name: copy Docker Compose files
       copy:
@@ -22,6 +23,11 @@
         dest: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/beoftexas/{{ item }}"
       loop:
       - docker-compose.yaml
+
+    - name: copy nginx config
+      copy:
+        src: "docker/nginx/default.conf"
+        dest: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/beoftexas/docker/nginx/default.conf"
 
     - name: copy environment file
       copy:
@@ -35,9 +41,9 @@
         chdir: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/beoftexas/"
       register: compose_up_result
 
-    - name: Wait for web container to be ready
+    - name: Wait for PHP-FPM container to be ready
       ansible.builtin.shell:
-        cmd: "docker compose exec -T web php -v"
+        cmd: "docker compose exec -T beoftexas php -v"
         chdir: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/beoftexas/"
       register: php_check
       retries: 10
@@ -55,7 +61,7 @@
 
     - name: Run database migrations
       ansible.builtin.shell:
-        cmd: "docker compose exec -T web php vendor/bin/phinx migrate -e production"
+        cmd: "docker compose exec -T beoftexas php vendor/bin/phinx migrate -e production"
         chdir: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/beoftexas/"
       register: migration_result
 
@@ -63,7 +69,7 @@
       ansible.builtin.debug:
         var: migration_result.stdout_lines
 
-    - name: Restart nginx to pick up beoftexas on shared network
+    - name: Restart reverse proxy nginx to pick up beoftexas on shared network
       ansible.builtin.shell:
         cmd: "docker compose restart web"
         chdir: /home/ubuntu/deploy/nginx
