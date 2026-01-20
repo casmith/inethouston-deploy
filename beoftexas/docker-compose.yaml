@@ -11,10 +11,10 @@ services:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - public_files:/var/www/html/public:ro
     depends_on:
-      - beoftexas
+      - web
     restart: always
 
-  beoftexas:
+  web:
     image: casmith/beoftexas:2026.01.20.919c851e
     env_file:
       - .env

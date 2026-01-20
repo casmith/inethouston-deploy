@@ -43,7 +43,7 @@
 
     - name: Wait for PHP-FPM container to be ready
       ansible.builtin.shell:
-        cmd: "docker compose exec -T beoftexas php -v"
+        cmd: "docker compose exec -T web php -v"
         chdir: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/beoftexas/"
       register: php_check
       retries: 10
@@ -61,7 +61,7 @@
 
     - name: Run database migrations
       ansible.builtin.shell:
-        cmd: "docker compose exec -T beoftexas php vendor/bin/phinx migrate -e production"
+        cmd: "docker compose exec -T web php vendor/bin/phinx migrate -e production"
         chdir: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/beoftexas/"
       register: migration_result
 
