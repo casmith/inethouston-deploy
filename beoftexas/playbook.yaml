@@ -41,6 +41,13 @@
         chdir: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/beoftexas/"
       register: compose_up_result
 
+    - name: Gracefully reload beoftexas nginx config
+      ansible.builtin.shell:
+        cmd: "docker compose exec -T nginx nginx -s reload"
+        chdir: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/beoftexas/"
+      register: nginx_reload_result
+      failed_when: false
+
     - name: Wait for PHP-FPM container to be ready
       ansible.builtin.shell:
         cmd: "docker compose exec -T web php -v"
