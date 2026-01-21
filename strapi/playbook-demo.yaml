@@ -38,7 +38,7 @@
 
     - name: Deploy with docker compose
       ansible.builtin.shell:
-        cmd: "docker compose up -d"
+        cmd: "export DATABASE_PASSWORD=$(cat secrets/strapi_db_pw.txt) && docker compose up -d"
         chdir: "{{ deploy_path }}/strapi/"
       register: compose_up_result
 
