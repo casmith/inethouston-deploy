@@ -1,0 +1,140 @@
+---
+- name: Restore Strapi app directory from S3 backup (Demo)
+  hosts: demo
+  gather_facts: false
+  become: true
+  vars:
+    deploy_path: /home/ubuntu/deploy/strapi
+    s3_access_key: "{{ lookup('env', 'CONTABO_S3_ACCESS_KEY') }}"
+    s3_secret_key: "{{ lookup('env', 'CONTABO_S3_SECRET_KEY') }}"
+    s3_bucket: "{{ lookup('env', 'CONTABO_S3_BUCKET') | default('beoftexas-backup', true) }}"
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Check if AWS CLI is already installed
+      ansible.builtin.command: aws --version
+      register: aws_cli_check
+      changed_when: false
+      failed_when: false
+
+    - name: Download AWS CLI v2 installer
+      ansible.builtin.get_url:
+        url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+        dest: /tmp/awscliv2.zip
+        mode: '0644'
+      when: aws_cli_check.rc != 0
+
+    - name: Unzip AWS CLI installer
+      ansible.builtin.unarchive:
+        src: /tmp/awscliv2.zip
+        dest: /tmp/
+        remote_src: true
+      when: aws_cli_check.rc != 0
+
+    - name: Install AWS CLI v2
+      ansible.builtin.command: /tmp/aws/install
+      when: aws_cli_check.rc != 0
+
+    - name: Clean up AWS CLI installer files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/awscliv2.zip
+        - /tmp/aws
+      when: aws_cli_check.rc != 0
+
+    - name: Download Strapi app backup from Contabo S3
+      ansible.builtin.shell: |
+        AWS_ACCESS_KEY_ID="{{ s3_access_key }}" \
+        AWS_SECRET_ACCESS_KEY="{{ s3_secret_key }}" \
+        aws s3 cp s3://{{ s3_bucket }}/strapi_app_latest.tar.gz /tmp/strapi_app_latest.tar.gz \
+          --endpoint-url https://usc1.contabostorage.com
+      no_log: false
+      changed_when: true
+
+    - name: Verify backup file was downloaded
+      ansible.builtin.stat:
+        path: /tmp/strapi_app_latest.tar.gz
+      register: backup_file
+      failed_when: not backup_file.stat.exists or backup_file.stat.size == 0
+
+    - name: Display backup file info
+      ansible.builtin.debug:
+        msg: "Backup file downloaded: {{ backup_file.stat.size }} bytes"
+
+    - name: Stop Strapi service
+      ansible.builtin.shell: |
+        cd {{ deploy_path }} && \
+        export DATABASE_PASSWORD=$(cat secrets/strapi_db_pw.txt) && \
+        docker compose stop web
+      register: stop_result
+      changed_when: true
+
+    - name: Display stop result
+      ansible.builtin.debug:
+        msg: "Strapi service stopped"
+
+    - name: Backup existing app directory (if exists)
+      ansible.builtin.shell: |
+        if [ -d "{{ deploy_path }}/app" ]; then
+          mv {{ deploy_path }}/app {{ deploy_path }}/app.backup.$(date +%Y%m%d_%H%M%S)
+        fi
+      args:
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Test backup file integrity
+      ansible.builtin.shell: tar -tzf /tmp/strapi_app_latest.tar.gz > /dev/null
+      register: integrity_check
+      changed_when: false
+      failed_when: integrity_check.rc != 0
+
+    - name: Extract Strapi app directory from backup
+      ansible.builtin.shell: |
+        cd {{ deploy_path }} && \
+        tar -xzf /tmp/strapi_app_latest.tar.gz
+      register: extract_result
+      changed_when: true
+
+    - name: Display extraction completion
+      ansible.builtin.debug:
+        msg: "Strapi app directory extracted successfully"
+
+    - name: Verify app directory exists
+      ansible.builtin.stat:
+        path: "{{ deploy_path }}/app"
+      register: app_dir
+      failed_when: not app_dir.stat.exists or not app_dir.stat.isdir
+
+    - name: Display app directory status
+      ansible.builtin.debug:
+        msg: "App directory verified at {{ deploy_path }}/app"
+
+    - name: Restart Strapi service
+      ansible.builtin.shell: |
+        cd {{ deploy_path }} && \
+        export DATABASE_PASSWORD=$(cat secrets/strapi_db_pw.txt) && \
+        docker compose start web
+      register: start_result
+      changed_when: true
+
+    - name: Display restart status
+      ansible.builtin.debug:
+        msg: "Strapi service restarted successfully"
+
+    - name: Clean up temporary backup file
+      ansible.builtin.file:
+        path: /tmp/strapi_app_latest.tar.gz
+        state: absent
+
+    - name: Display final status
+      ansible.builtin.debug:
+        msg:
+          - "====================================="
+          - "Strapi app restore completed successfully!"
+          - "====================================="

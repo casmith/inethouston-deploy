@@ -1,0 +1,152 @@
+---
+- name: Restore strapi postgres database from S3 backup (Demo)
+  hosts: demo
+  gather_facts: false
+  become: true
+  vars:
+    deploy_path: /home/ubuntu/deploy/strapi
+    s3_access_key: "{{ lookup('env', 'CONTABO_S3_ACCESS_KEY') }}"
+    s3_secret_key: "{{ lookup('env', 'CONTABO_S3_SECRET_KEY') }}"
+    s3_bucket: "{{ lookup('env', 'CONTABO_S3_BUCKET') | default('beoftexas-backup', true) }}"
+    db_pw_file: "{{ deploy_path }}/secrets/strapi_db_pw.txt"
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install unzip utility
+      ansible.builtin.apt:
+        name: unzip
+        state: present
+
+    - name: Check if AWS CLI is already installed
+      ansible.builtin.command: aws --version
+      register: aws_cli_check
+      changed_when: false
+      failed_when: false
+
+    - name: Download AWS CLI v2 installer
+      ansible.builtin.get_url:
+        url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+        dest: /tmp/awscliv2.zip
+        mode: '0644'
+      when: aws_cli_check.rc != 0
+
+    - name: Unzip AWS CLI installer
+      ansible.builtin.unarchive:
+        src: /tmp/awscliv2.zip
+        dest: /tmp/
+        remote_src: true
+      when: aws_cli_check.rc != 0
+
+    - name: Install AWS CLI v2
+      ansible.builtin.command: /tmp/aws/install
+      when: aws_cli_check.rc != 0
+
+    - name: Clean up AWS CLI installer files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/awscliv2.zip
+        - /tmp/aws
+      when: aws_cli_check.rc != 0
+
+    - name: Download strapi database backup from Contabo S3
+      ansible.builtin.shell: |
+        AWS_ACCESS_KEY_ID="{{ s3_access_key }}" \
+        AWS_SECRET_ACCESS_KEY="{{ s3_secret_key }}" \
+        aws s3 cp s3://{{ s3_bucket }}/strapi_latest.sql.gz /tmp/strapi_postgres_latest.sql.gz \
+          --endpoint-url https://usc1.contabostorage.com
+      no_log: false
+      changed_when: true
+
+    - name: Verify backup file was downloaded
+      ansible.builtin.stat:
+        path: /tmp/strapi_postgres_latest.sql.gz
+      register: backup_file
+      failed_when: not backup_file.stat.exists or backup_file.stat.size == 0
+
+    - name: Display backup file info
+      ansible.builtin.debug:
+        msg: "Backup file downloaded: {{ backup_file.stat.size }} bytes"
+
+    - name: Decompress backup file
+      ansible.builtin.shell: gunzip -f /tmp/strapi_postgres_latest.sql.gz
+      register: decompress_result
+      changed_when: true
+
+    - name: Verify decompressed file exists
+      ansible.builtin.stat:
+        path: /tmp/strapi_postgres_latest.sql
+      register: sql_file
+      failed_when: not sql_file.stat.exists
+
+    - name: Display SQL file info
+      ansible.builtin.debug:
+        msg: "Decompressed SQL file: {{ sql_file.stat.size }} bytes"
+
+    - name: Wait for PostgreSQL to be ready
+      ansible.builtin.shell: |
+        cd {{ deploy_path }} && \
+        PGPASSWORD=$(cat {{ db_pw_file }}) docker compose exec -T postgres psql -U strapi -d strapi -c "SELECT 1" 2>&1
+      register: db_ready
+      until: db_ready.rc == 0
+      retries: 30
+      delay: 2
+      changed_when: false
+      no_log: false
+
+    - name: Drop existing strapi database
+      ansible.builtin.shell: |
+        cd {{ deploy_path }} && \
+        PGPASSWORD=$(cat {{ db_pw_file }}) docker compose exec -T postgres psql -U strapi -d postgres -c "DROP DATABASE IF EXISTS strapi;"
+      register: drop_result
+      changed_when: true
+      no_log: true
+
+    - name: Create fresh strapi database
+      ansible.builtin.shell: |
+        cd {{ deploy_path }} && \
+        PGPASSWORD=$(cat {{ db_pw_file }}) docker compose exec -T postgres psql -U strapi -d postgres -c "CREATE DATABASE strapi;"
+      register: create_result
+      changed_when: true
+      no_log: true
+
+    - name: Restore strapi database from backup
+      ansible.builtin.shell: |
+        cd {{ deploy_path }} && \
+        PGPASSWORD=$(cat {{ db_pw_file }}) docker compose exec -T postgres psql -U strapi -d strapi < /tmp/strapi_postgres_latest.sql
+      register: restore_result
+      changed_when: true
+      no_log: true
+
+    - name: Display restore completion
+      ansible.builtin.debug:
+        msg: "Database restored successfully"
+
+    - name: Verify database contains data
+      ansible.builtin.shell: |
+        cd {{ deploy_path }} && \
+        PGPASSWORD=$(cat {{ db_pw_file }}) docker compose exec -T postgres psql -U strapi -d strapi -c "\dt" 2>&1
+      register: table_list
+      changed_when: false
+      no_log: false
+
+    - name: Display database tables
+      ansible.builtin.debug:
+        msg: "{{ table_list.stdout_lines }}"
+
+    - name: Clean up temporary SQL file
+      ansible.builtin.file:
+        path: /tmp/strapi_postgres_latest.sql
+        state: absent
+
+    - name: Display final status
+      ansible.builtin.debug:
+        msg:
+          - "====================================="
+          - "Strapi database restore completed!"
+          - "====================================="
