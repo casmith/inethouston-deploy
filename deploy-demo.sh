@@ -124,9 +124,27 @@ run_playbook "wbaoftexas/playbook-demo.yaml" "Step 11: Deploy WBA of Texas"
 # Note: wbaoftexas restore playbook would go here if needed
 # run_playbook "wbaoftexas/restore-db-demo.yaml" "Step 12: Restore wbaoftexas database"
 
+# Restore SSL certificates from S3 if backup exists (avoids Let's Encrypt rate limits)
+echo -e "${YELLOW}>>> Step 12: Restore SSL certificates from S3 (if backup exists)${NC}"
+S3_BUCKET="${CONTABO_S3_BUCKET:-beoftexas-backup}"
+run_ssh "mkdir -p /home/ubuntu/deploy/nginx-demo/data/certbot
+if AWS_ACCESS_KEY_ID='$CONTABO_S3_ACCESS_KEY' \
+   AWS_SECRET_ACCESS_KEY='$CONTABO_S3_SECRET_KEY' \
+   aws s3 cp s3://$S3_BUCKET/demo-certbot-backup.tar.gz /tmp/demo-certbot-backup.tar.gz \
+       --endpoint-url https://usc1.contabostorage.com 2>/dev/null; then
+    cd /home/ubuntu/deploy/nginx-demo/data/certbot
+    tar -xzf /tmp/demo-certbot-backup.tar.gz
+    rm /tmp/demo-certbot-backup.tar.gz
+    echo 'Certificates restored from S3 backup'
+else
+    echo 'No certificate backup found in S3, will issue new certificates'
+fi"
+echo -e "${GREEN}✓ Certificate restore check complete${NC}"
+echo ""
+
 # Deploy nginx and cloudflared
-run_playbook "nginx-demo/playbook.yaml" "Step 12: Deploy Nginx (reverse proxy + SSL certs)"
-run_playbook "cloudflared/playbook.yaml" "Step 13: Deploy Cloudflare Tunnel"
+run_playbook "nginx-demo/playbook.yaml" "Step 13: Deploy Nginx (reverse proxy + SSL certs)"
+run_playbook "cloudflared/playbook.yaml" "Step 14: Deploy Cloudflare Tunnel"
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}Demo Deployment Complete!${NC}"

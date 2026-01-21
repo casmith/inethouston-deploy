@@ -34,6 +34,28 @@ run_ssh() {
     ssh -o BatchMode=yes ubuntu@$SERVER_IP "$@"
 }
 
+echo -e "${YELLOW}>>> Backing up SSL certificates to S3...${NC}"
+if [ -z "$CONTABO_S3_ACCESS_KEY" ] || [ -z "$CONTABO_S3_SECRET_KEY" ]; then
+    echo -e "${YELLOW}Warning: S3 credentials not set, skipping certificate backup${NC}"
+    echo "Set CONTABO_S3_ACCESS_KEY and CONTABO_S3_SECRET_KEY to enable backup"
+else
+    S3_BUCKET="${CONTABO_S3_BUCKET:-beoftexas-backup}"
+    run_ssh "if [ -d /home/ubuntu/deploy/nginx-demo/data/certbot/conf/live ]; then
+        cd /home/ubuntu/deploy/nginx-demo/data/certbot
+        sudo tar -czf /tmp/demo-certbot-backup.tar.gz conf
+        AWS_ACCESS_KEY_ID='$CONTABO_S3_ACCESS_KEY' \
+        AWS_SECRET_ACCESS_KEY='$CONTABO_S3_SECRET_KEY' \
+        aws s3 cp /tmp/demo-certbot-backup.tar.gz s3://$S3_BUCKET/demo-certbot-backup.tar.gz \
+            --endpoint-url https://usc1.contabostorage.com
+        rm /tmp/demo-certbot-backup.tar.gz
+        echo 'Certificates backed up to S3'
+    else
+        echo 'No certificates to backup'
+    fi"
+fi
+echo -e "${GREEN}✓ Certificate backup complete${NC}"
+echo ""
+
 echo -e "${YELLOW}>>> Stopping and removing all demo containers...${NC}"
 
 # Stop and remove each service
@@ -72,5 +94,5 @@ echo "  export CONTABO_S3_SECRET_KEY=your_secret"
 echo "  ./deploy-demo.sh"
 echo ""
 echo "Note: Cloudflare Tunnel and DNS records are preserved."
-echo "      SSL certificates will be re-issued on next deploy."
+echo "      SSL certificates backed up to S3 and will be restored on next deploy."
 echo ""
