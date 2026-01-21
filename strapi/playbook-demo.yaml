@@ -1,0 +1,58 @@
+- name: Deploy Strapi via Docker (Demo)
+  hosts: demo
+  become: true
+  tasks:
+    - name: Log into DockerHub
+      docker_login:
+        username: '{{ lookup("env", "DOCKERHUB_USERNAME") }}'
+        password: '{{ lookup("env", "DOCKERHUB_PASSWORD") }}'
+
+    - name: Creates directory
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+      loop:
+        - "{{ deploy_path }}"
+        - "{{ deploy_path }}/strapi"
+        - "{{ deploy_path }}/strapi/data"
+        - "{{ deploy_path }}/strapi/secrets"
+
+    - name: Create shared Docker network
+      community.docker.docker_network:
+        name: shared
+        state: present
+
+    - name: copy Docker Compose files
+      copy:
+        src: "{{ item }}"
+        dest: "{{ deploy_path }}/strapi/{{ item }}"
+        owner: ubuntu
+        group: ubuntu
+      loop:
+      - docker-compose.yaml
+
+    - name: copy secrets
+      copy:
+        src: "../secret/demo/{{ item }}"
+        dest: "{{ deploy_path }}/strapi/secrets/{{ item }}"
+        owner: ubuntu
+        group: ubuntu
+        mode: '0600'
+      loop:
+      - strapi_db_pw.txt
+
+    - name: Deploy with docker compose
+      ansible.builtin.shell:
+        cmd: "export DATABASE_PASSWORD=$(cat secrets/strapi_db_pw.txt) && docker compose up -d"
+        chdir: "{{ deploy_path }}/strapi/"
+      register: compose_up_result
+
+    - name: Restart nginx to pick up strapi on shared network
+      ansible.builtin.shell:
+        cmd: "docker compose restart web"
+        chdir: "{{ deploy_path }}/nginx-demo"
+      register: nginx_restart_result
+      failed_when: false
+      changed_when: nginx_restart_result.rc == 0

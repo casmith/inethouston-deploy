@@ -1,0 +1,89 @@
+- name: Deploy Benefit Elect of Texas website via Docker (Demo)
+  hosts: demo
+  become: true
+  tasks:
+    - name: Log into DockerHub
+      docker_login:
+        username: '{{ lookup("env", "DOCKERHUB_USERNAME") }}'
+        password: '{{ lookup("env", "DOCKERHUB_PASSWORD") }}'
+
+    - name: Creates directory
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+      loop:
+        - "{{ deploy_path }}"
+        - "{{ deploy_path }}/beoftexas"
+        - "{{ deploy_path }}/beoftexas/data"
+        - "{{ deploy_path }}/beoftexas/docker/nginx"
+
+    - name: Create shared Docker network
+      community.docker.docker_network:
+        name: shared
+        state: present
+
+    - name: copy Docker Compose files
+      copy:
+        src: "docker-compose-demo.yaml"
+        dest: "{{ deploy_path }}/beoftexas/docker-compose.yaml"
+        owner: ubuntu
+        group: ubuntu
+
+    - name: copy nginx config (demo version with updated CSP)
+      copy:
+        src: "docker/nginx-demo/default.conf"
+        dest: "{{ deploy_path }}/beoftexas/docker/nginx/default.conf"
+        owner: ubuntu
+        group: ubuntu
+
+    - name: copy environment file
+      copy:
+        src: "../secret/demo/beoftexas.env"
+        dest: "{{ deploy_path }}/beoftexas/.env"
+        mode: '0600'
+        owner: ubuntu
+        group: ubuntu
+
+    - name: Deploy with docker compose
+      ansible.builtin.shell:
+        cmd: "docker compose up -d"
+        chdir: "{{ deploy_path }}/beoftexas/"
+      register: compose_up_result
+
+    - name: Gracefully reload beoftexas nginx config
+      ansible.builtin.shell:
+        cmd: "docker compose exec -T nginx nginx -s reload"
+        chdir: "{{ deploy_path }}/beoftexas/"
+      register: nginx_reload_result
+      failed_when: false
+
+    - name: Wait for PHP-FPM container to be ready
+      ansible.builtin.shell:
+        cmd: "docker compose exec -T web php -v"
+        chdir: "{{ deploy_path }}/beoftexas/"
+      register: php_check
+      retries: 10
+      delay: 3
+      until: php_check.rc == 0
+
+    - name: Wait for MariaDB to be ready
+      ansible.builtin.shell:
+        cmd: "docker compose exec -T mariadb mariadb -u beoftexas -p$(grep '^DB_PASSWORD=' .env | cut -d'=' -f2-) -e 'SELECT 1' 2>&1"
+        chdir: "{{ deploy_path }}/beoftexas/"
+      register: db_check
+      retries: 30
+      delay: 2
+      until: db_check.rc == 0
+
+    # NOTE: Migrations are run after database restore in deploy-demo.sh
+    # Do not run migrations here on empty database
+
+    - name: Restart reverse proxy nginx to pick up beoftexas on shared network
+      ansible.builtin.shell:
+        cmd: "docker compose restart web"
+        chdir: "{{ deploy_path }}/nginx-demo"
+      register: nginx_restart_result
+      failed_when: false
+      changed_when: nginx_restart_result.rc == 0

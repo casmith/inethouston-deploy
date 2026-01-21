@@ -1,0 +1,10 @@
+all:
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+  children:
+    servers:
+      hosts:
+        demo:
+          ansible_host: 192.168.10.43
+          ansible_user: ubuntu
+          deploy_path: /home/ubuntu/deploy

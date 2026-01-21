@@ -1,0 +1,94 @@
+- name: Deploy nginx reverse proxy with certbot DNS-01 via Docker
+  hosts: demo
+  become: true
+  vars:
+    cert_email: admin@beoftexas.com
+    demo_domains:
+      - demo.beoftexas.com
+      - demo-strapi.beoftexas.com
+      - demo.wbaoftexas.com
+  tasks:
+    - name: Creates directory
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+        owner: ubuntu
+        group: ubuntu
+      loop:
+        - "{{ deploy_path }}/nginx-demo"
+        - "{{ deploy_path }}/nginx-demo/data"
+        - "{{ deploy_path }}/nginx-demo/data/nginx"
+        - "{{ deploy_path }}/nginx-demo/data/certbot"
+        - "{{ deploy_path }}/nginx-demo/data/certbot/conf"
+        - "{{ deploy_path }}/nginx-demo/data/certbot/www"
+
+    - name: Create shared Docker network
+      community.docker.docker_network:
+        name: shared
+        state: present
+
+    - name: Copy Docker Compose files
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ deploy_path }}/nginx-demo/{{ item }}"
+        mode: "0644"
+        owner: ubuntu
+        group: ubuntu
+      loop:
+        - docker-compose.yaml
+
+    - name: Copy Cloudflare credentials for DNS-01 challenge
+      ansible.builtin.copy:
+        src: "../secret/demo/cloudflare.ini"
+        dest: "{{ deploy_path }}/nginx-demo/data/cloudflare.ini"
+        mode: "0600"
+        owner: ubuntu
+        group: ubuntu
+
+    - name: Copy all nginx config files from conf directory
+      ansible.builtin.copy:
+        src: "conf/"
+        dest: "{{ deploy_path }}/nginx-demo/data/nginx/"
+        mode: "0644"
+        owner: ubuntu
+        group: ubuntu
+
+    - name: Check if certificates already exist
+      ansible.builtin.stat:
+        path: "{{ deploy_path }}/nginx-demo/data/certbot/conf/live/demo.beoftexas.com/fullchain.pem"
+      register: cert_stat
+
+    - name: Issue SSL certificates via DNS-01 challenge
+      ansible.builtin.shell:
+        cmd: |
+          docker compose run --rm --entrypoint '' certbot certbot certonly \
+            --dns-cloudflare \
+            --dns-cloudflare-credentials /etc/cloudflare.ini \
+            --dns-cloudflare-propagation-seconds 60 \
+            -d {{ demo_domains | join(' -d ') }} \
+            --agree-tos \
+            --email {{ cert_email }} \
+            --non-interactive
+        chdir: "{{ deploy_path }}/nginx-demo/"
+      register: certbot_result
+      when: not cert_stat.stat.exists
+
+    - name: Display certbot output
+      ansible.builtin.debug:
+        var: certbot_result.stdout_lines
+      when: certbot_result is defined and certbot_result.stdout_lines is defined
+
+    - name: Deploy with docker compose
+      ansible.builtin.shell:
+        cmd: "docker compose up -d"
+        chdir: "{{ deploy_path }}/nginx-demo/"
+      register: compose_up_result
+
+    - name: Gracefully reload nginx to apply config changes
+      ansible.builtin.shell:
+        cmd: "docker compose exec -T web nginx -s reload"
+        chdir: "{{ deploy_path }}/nginx-demo/"
+      register: nginx_reload_result
+      failed_when: false
+      changed_when: nginx_reload_result.rc == 0
