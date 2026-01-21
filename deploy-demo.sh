@@ -38,6 +38,11 @@ run_playbook() {
     fi
 }
 
+# Function to run SSH command on demo server
+run_ssh() {
+    ssh -o BatchMode=yes ubuntu@$SERVER_IP "$@"
+}
+
 # Check prerequisites
 echo -e "${YELLOW}>>> Checking prerequisites...${NC}"
 
@@ -51,6 +56,15 @@ fi
 if grep -q "YOUR_CLOUDFLARE_TUNNEL_TOKEN_HERE" secret/demo/cloudflare_tunnel_token.txt 2>/dev/null; then
     echo -e "${RED}ERROR: Cloudflare tunnel token not configured${NC}"
     echo "Please edit secret/demo/cloudflare_tunnel_token.txt with your tunnel token"
+    exit 1
+fi
+
+# Check S3 credentials for database restores
+if [ -z "$CONTABO_S3_ACCESS_KEY" ] || [ -z "$CONTABO_S3_SECRET_KEY" ]; then
+    echo -e "${RED}ERROR: S3 credentials not set${NC}"
+    echo "Please set environment variables:"
+    echo "  export CONTABO_S3_ACCESS_KEY=your_access_key"
+    echo "  export CONTABO_S3_SECRET_KEY=your_secret_key"
     exit 1
 fi
 
@@ -70,23 +84,53 @@ else
     echo ""
 fi
 
-# Now run all deployment playbooks in order
+# Deploy infrastructure
 run_playbook "install-docker.yaml" "Step 2: Install Docker"
+
+# Deploy Strapi
 run_playbook "strapi/playbook-demo.yaml" "Step 3: Deploy Strapi (PostgreSQL CMS)"
-run_playbook "beoftexas/playbook-demo.yaml" "Step 4: Deploy Benefit Elect of Texas"
-run_playbook "wbaoftexas/playbook-demo.yaml" "Step 5: Deploy WBA of Texas"
-run_playbook "nginx-demo/playbook.yaml" "Step 6: Deploy Nginx (reverse proxy + SSL certs)"
-run_playbook "cloudflared/playbook.yaml" "Step 7: Deploy Cloudflare Tunnel"
+
+# Restore Strapi data
+run_playbook "strapi/restore-app-demo.yaml" "Step 4: Restore Strapi app directory"
+run_playbook "strapi/restore-db-demo.yaml" "Step 5: Restore Strapi database"
+
+# Restart Strapi to pick up restored data
+echo -e "${YELLOW}>>> Step 6: Restart Strapi${NC}"
+run_ssh "cd /home/ubuntu/deploy/strapi && export DATABASE_PASSWORD=\$(cat secrets/strapi_db_pw.txt) && docker compose restart web"
+echo -e "${GREEN}✓ Strapi restarted${NC}"
+echo ""
+
+# Clear beoftexas public_files volume if it exists (for clean asset deployment)
+echo -e "${YELLOW}>>> Step 7: Prepare beoftexas deployment${NC}"
+run_ssh "sudo docker volume rm beoftexas_public_files 2>/dev/null || true"
+echo -e "${GREEN}✓ beoftexas volume cleared${NC}"
+echo ""
+
+# Deploy beoftexas
+run_playbook "beoftexas/playbook-demo.yaml" "Step 8: Deploy Benefit Elect of Texas"
+
+# Restore beoftexas database
+run_playbook "beoftexas/restore-db-demo.yaml" "Step 9: Restore beoftexas database"
+
+# Deploy wbaoftexas
+run_playbook "wbaoftexas/playbook-demo.yaml" "Step 10: Deploy WBA of Texas"
+
+# Note: wbaoftexas restore playbook would go here if needed
+# run_playbook "wbaoftexas/restore-db-demo.yaml" "Step 11: Restore wbaoftexas database"
+
+# Deploy nginx and cloudflared
+run_playbook "nginx-demo/playbook.yaml" "Step 11: Deploy Nginx (reverse proxy + SSL certs)"
+run_playbook "cloudflared/playbook.yaml" "Step 12: Deploy Cloudflare Tunnel"
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}Demo Deployment Complete!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
-echo "All services deployed successfully!"
+echo "All services deployed and databases restored!"
 echo ""
 echo "Deployed services:"
-echo "  ✓ Strapi CMS (PostgreSQL)"
-echo "  ✓ Benefit Elect of Texas (MariaDB)"
+echo "  ✓ Strapi CMS (PostgreSQL) - restored from backup"
+echo "  ✓ Benefit Elect of Texas (MariaDB) - restored from backup"
 echo "  ✓ WBA of Texas (MariaDB)"
 echo "  ✓ Nginx reverse proxy with Let's Encrypt SSL"
 echo "  ✓ Cloudflare Tunnel"
@@ -101,9 +145,4 @@ echo "  1. SSH to demo VM and check containers: docker ps"
 echo "  2. Check cloudflared logs: docker logs cloudflared-tunnel-1"
 echo "  3. Verify certs: ls /home/ubuntu/deploy/nginx-demo/data/certbot/conf/live/"
 echo "  4. Test URLs in browser"
-echo ""
-echo "To restore databases from production backups:"
-echo "  ansible-playbook -i $INVENTORY beoftexas/restore-db.yaml"
-echo "  ansible-playbook -i $INVENTORY wbaoftexas/restore-db.yaml"
-echo "  ansible-playbook -i $INVENTORY strapi/restore-db.yaml"
 echo ""
