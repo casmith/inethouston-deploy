@@ -1,0 +1,47 @@
+- name: Deploy Cloudflare Tunnel via Docker
+  hosts: demo
+  become: true
+  tasks:
+    - name: Creates directory
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ deploy_path }}/cloudflared"
+        - "{{ deploy_path }}/cloudflared/secrets"
+
+    - name: Create shared Docker network
+      community.docker.docker_network:
+        name: shared
+        state: present
+
+    - name: Copy Docker Compose files
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ deploy_path }}/cloudflared/{{ item }}"
+        mode: "0644"
+      loop:
+        - docker-compose.yaml
+
+    - name: Copy tunnel token secret
+      ansible.builtin.copy:
+        src: "../secret/demo/cloudflare_tunnel_token.txt"
+        dest: "{{ deploy_path }}/cloudflared/secrets/cloudflare_tunnel_token.txt"
+        mode: "0600"
+
+    - name: Deploy with docker compose
+      ansible.builtin.shell:
+        cmd: "export CLOUDFLARE_TUNNEL_TOKEN=$(cat secrets/cloudflare_tunnel_token.txt) && docker compose up -d"
+        chdir: "{{ deploy_path }}/cloudflared/"
+      register: compose_up_result
+
+    - name: Display cloudflared status
+      ansible.builtin.shell:
+        cmd: "docker compose logs --tail=20"
+        chdir: "{{ deploy_path }}/cloudflared/"
+      register: tunnel_logs
+
+    - name: Show tunnel logs
+      ansible.builtin.debug:
+        var: tunnel_logs.stdout_lines
