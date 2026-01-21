@@ -96,7 +96,7 @@ run_playbook "strapi/restore-db-demo.yaml" "Step 5: Restore Strapi database"
 
 # Restart Strapi to pick up restored data
 echo -e "${YELLOW}>>> Step 6: Restart Strapi${NC}"
-run_ssh "cd /home/ubuntu/deploy/strapi && sudo bash -c 'export DATABASE_PASSWORD=\$(cat secrets/strapi_db_pw.txt) && docker compose restart web'"
+run_ssh "cd /home/ubuntu/deploy/strapi && export DATABASE_PASSWORD=\$(cat secrets/strapi_db_pw.txt) && docker compose restart web"
 echo -e "${GREEN}✓ Strapi restarted${NC}"
 echo ""
 
@@ -114,7 +114,7 @@ run_playbook "beoftexas/restore-db-demo.yaml" "Step 9: Restore beoftexas databas
 
 # Run beoftexas migrations (after restore)
 echo -e "${YELLOW}>>> Step 10: Run beoftexas database migrations${NC}"
-run_ssh "cd /home/ubuntu/deploy/beoftexas && sudo docker compose exec -T web php vendor/bin/phinx migrate -e production"
+run_ssh "cd /home/ubuntu/deploy/beoftexas && docker compose exec -T web php vendor/bin/phinx migrate -e production"
 echo -e "${GREEN}✓ beoftexas migrations completed${NC}"
 echo ""
 

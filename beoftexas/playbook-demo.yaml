@@ -11,6 +11,8 @@
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory
+        owner: ubuntu
+        group: ubuntu
       loop:
         - "{{ deploy_path }}"
         - "{{ deploy_path }}/beoftexas"
@@ -26,17 +28,23 @@
       copy:
         src: "docker-compose-demo.yaml"
         dest: "{{ deploy_path }}/beoftexas/docker-compose.yaml"
+        owner: ubuntu
+        group: ubuntu
 
     - name: copy nginx config (demo version with updated CSP)
       copy:
         src: "docker/nginx-demo/default.conf"
         dest: "{{ deploy_path }}/beoftexas/docker/nginx/default.conf"
+        owner: ubuntu
+        group: ubuntu
 
     - name: copy environment file
       copy:
         src: "../secret/demo/beoftexas.env"
         dest: "{{ deploy_path }}/beoftexas/.env"
         mode: '0600'
+        owner: ubuntu
+        group: ubuntu
 
     - name: Deploy with docker compose
       ansible.builtin.shell:

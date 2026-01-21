@@ -11,6 +11,8 @@
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory
+        owner: ubuntu
+        group: ubuntu
       loop:
         - "{{ deploy_path }}"
         - "{{ deploy_path }}/wbaoftexas"
@@ -27,6 +29,8 @@
       copy:
         src: "{{ item }}"
         dest: "{{ deploy_path }}/wbaoftexas/{{ item }}"
+        owner: ubuntu
+        group: ubuntu
       loop:
       - docker-compose.yaml
 
@@ -34,6 +38,9 @@
       copy:
         src: "../secret/demo/{{ item }}"
         dest: "{{ deploy_path }}/wbaoftexas/secrets/{{ item }}"
+        owner: ubuntu
+        group: ubuntu
+        mode: '0600'
       loop:
       - wbaoftexas_db_pw.txt
       - wbaoftexas_db_root_pw.txt

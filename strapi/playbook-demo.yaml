@@ -11,6 +11,8 @@
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory
+        owner: ubuntu
+        group: ubuntu
       loop:
         - "{{ deploy_path }}"
         - "{{ deploy_path }}/strapi"
@@ -26,6 +28,8 @@
       copy:
         src: "{{ item }}"
         dest: "{{ deploy_path }}/strapi/{{ item }}"
+        owner: ubuntu
+        group: ubuntu
       loop:
       - docker-compose.yaml
 
@@ -33,6 +37,9 @@
       copy:
         src: "../secret/demo/{{ item }}"
         dest: "{{ deploy_path }}/strapi/secrets/{{ item }}"
+        owner: ubuntu
+        group: ubuntu
+        mode: '0600'
       loop:
       - strapi_db_pw.txt
 
