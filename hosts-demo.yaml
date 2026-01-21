@@ -5,6 +5,6 @@ all:
     servers:
       hosts:
         demo:
-          ansible_host: 192.168.1.100  # Replace with your demo VM's IP address
+          ansible_host: 192.168.10.43
           ansible_user: ubuntu
           deploy_path: /home/ubuntu/deploy
