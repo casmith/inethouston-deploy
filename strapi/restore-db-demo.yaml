@@ -54,11 +54,13 @@
         - /tmp/aws
       when: aws_cli_check.rc != 0
 
+    # NOTE: strapi_latest.sql.gz is corrupted (see GitHub issue #9)
+    # Using last known good backup from 2026-01-09 until backup job is fixed
     - name: Download strapi database backup from Contabo S3
       ansible.builtin.shell: |
         AWS_ACCESS_KEY_ID="{{ s3_access_key }}" \
         AWS_SECRET_ACCESS_KEY="{{ s3_secret_key }}" \
-        aws s3 cp s3://{{ s3_bucket }}/strapi_latest.sql.gz /tmp/strapi_postgres_latest.sql.gz \
+        aws s3 cp s3://{{ s3_bucket }}/strapi_20260109T231005.sql.gz /tmp/strapi_postgres_latest.sql.gz \
           --endpoint-url https://usc1.contabostorage.com
       no_log: false
       changed_when: true
