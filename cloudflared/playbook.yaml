@@ -7,6 +7,8 @@
         path: "{{ item }}"
         state: directory
         mode: "0755"
+        owner: ubuntu
+        group: ubuntu
       loop:
         - "{{ deploy_path }}/cloudflared"
         - "{{ deploy_path }}/cloudflared/secrets"
@@ -21,6 +23,8 @@
         src: "{{ item }}"
         dest: "{{ deploy_path }}/cloudflared/{{ item }}"
         mode: "0644"
+        owner: ubuntu
+        group: ubuntu
       loop:
         - docker-compose.yaml
 
@@ -29,6 +33,8 @@
         src: "../secret/demo/cloudflare_tunnel_token.txt"
         dest: "{{ deploy_path }}/cloudflared/secrets/cloudflare_tunnel_token.txt"
         mode: "0600"
+        owner: ubuntu
+        group: ubuntu
 
     - name: Deploy with docker compose
       ansible.builtin.shell:

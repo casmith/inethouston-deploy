@@ -13,6 +13,8 @@
         path: "{{ item }}"
         state: directory
         mode: "0755"
+        owner: ubuntu
+        group: ubuntu
       loop:
         - "{{ deploy_path }}/nginx-demo"
         - "{{ deploy_path }}/nginx-demo/data"
@@ -31,6 +33,8 @@
         src: "{{ item }}"
         dest: "{{ deploy_path }}/nginx-demo/{{ item }}"
         mode: "0644"
+        owner: ubuntu
+        group: ubuntu
       loop:
         - docker-compose.yaml
 
@@ -39,12 +43,16 @@
         src: "../secret/demo/cloudflare.ini"
         dest: "{{ deploy_path }}/nginx-demo/data/cloudflare.ini"
         mode: "0600"
+        owner: ubuntu
+        group: ubuntu
 
     - name: Copy all nginx config files from conf directory
       ansible.builtin.copy:
         src: "conf/"
         dest: "{{ deploy_path }}/nginx-demo/data/nginx/"
         mode: "0644"
+        owner: ubuntu
+        group: ubuntu
 
     - name: Check if certificates already exist
       ansible.builtin.stat:
@@ -57,7 +65,7 @@
           docker compose run --rm certbot certonly \
             --dns-cloudflare \
             --dns-cloudflare-credentials /etc/cloudflare.ini \
-            --dns-cloudflare-propagation-seconds 30 \
+            --dns-cloudflare-propagation-seconds 60 \
             -d {{ demo_domains | join(' -d ') }} \
             --agree-tos \
             --email {{ cert_email }} \
