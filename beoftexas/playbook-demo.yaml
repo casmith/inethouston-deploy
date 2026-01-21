@@ -69,15 +69,8 @@
       delay: 2
       until: db_check.rc == 0
 
-    - name: Run database migrations
-      ansible.builtin.shell:
-        cmd: "docker compose exec -T web php vendor/bin/phinx migrate -e production"
-        chdir: "{{ deploy_path }}/beoftexas/"
-      register: migration_result
-
-    - name: Display migration output
-      ansible.builtin.debug:
-        var: migration_result.stdout_lines
+    # NOTE: Migrations are run after database restore in deploy-demo.sh
+    # Do not run migrations here on empty database
 
     - name: Restart reverse proxy nginx to pick up beoftexas on shared network
       ansible.builtin.shell:

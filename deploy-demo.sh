@@ -112,15 +112,21 @@ run_playbook "beoftexas/playbook-demo.yaml" "Step 8: Deploy Benefit Elect of Tex
 # Restore beoftexas database
 run_playbook "beoftexas/restore-db-demo.yaml" "Step 9: Restore beoftexas database"
 
+# Run beoftexas migrations (after restore)
+echo -e "${YELLOW}>>> Step 10: Run beoftexas database migrations${NC}"
+run_ssh "cd /home/ubuntu/deploy/beoftexas && docker compose exec -T web php vendor/bin/phinx migrate -e production"
+echo -e "${GREEN}✓ beoftexas migrations completed${NC}"
+echo ""
+
 # Deploy wbaoftexas
-run_playbook "wbaoftexas/playbook-demo.yaml" "Step 10: Deploy WBA of Texas"
+run_playbook "wbaoftexas/playbook-demo.yaml" "Step 11: Deploy WBA of Texas"
 
 # Note: wbaoftexas restore playbook would go here if needed
-# run_playbook "wbaoftexas/restore-db-demo.yaml" "Step 11: Restore wbaoftexas database"
+# run_playbook "wbaoftexas/restore-db-demo.yaml" "Step 12: Restore wbaoftexas database"
 
 # Deploy nginx and cloudflared
-run_playbook "nginx-demo/playbook.yaml" "Step 11: Deploy Nginx (reverse proxy + SSL certs)"
-run_playbook "cloudflared/playbook.yaml" "Step 12: Deploy Cloudflare Tunnel"
+run_playbook "nginx-demo/playbook.yaml" "Step 12: Deploy Nginx (reverse proxy + SSL certs)"
+run_playbook "cloudflared/playbook.yaml" "Step 13: Deploy Cloudflare Tunnel"
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}Demo Deployment Complete!${NC}"
