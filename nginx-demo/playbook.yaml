@@ -62,7 +62,7 @@
     - name: Issue SSL certificates via DNS-01 challenge
       ansible.builtin.shell:
         cmd: |
-          docker compose run --rm certbot certonly \
+          docker compose run --rm --entrypoint '' certbot certbot certonly \
             --dns-cloudflare \
             --dns-cloudflare-credentials /etc/cloudflare.ini \
             --dns-cloudflare-propagation-seconds 60 \
