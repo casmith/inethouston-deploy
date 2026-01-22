@@ -1,0 +1,53 @@
+- name: Deploy WBA of Texas website via Docker (Demo)
+  hosts: demo
+  become: true
+  tasks:
+    - name: Log into DockerHub
+      docker_login:
+        username: '{{ lookup("env", "DOCKERHUB_USERNAME") }}'
+        password: '{{ lookup("env", "DOCKERHUB_PASSWORD") }}'
+
+    - name: Creates directory
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "{{ deploy_path }}"
+        - "{{ deploy_path }}/wbaoftexas"
+        - "{{ deploy_path }}/wbaoftexas/data"
+        - "{{ deploy_path }}/wbaoftexas/data/mariadb"
+        - "{{ deploy_path }}/wbaoftexas/secrets"
+
+    - name: Create shared Docker network
+      community.docker.docker_network:
+        name: shared
+        state: present
+
+    - name: copy Docker Compose files
+      copy:
+        src: "{{ item }}"
+        dest: "{{ deploy_path }}/wbaoftexas/{{ item }}"
+      loop:
+      - docker-compose.yaml
+
+    - name: copy secrets
+      copy:
+        src: "../secret/demo/{{ item }}"
+        dest: "{{ deploy_path }}/wbaoftexas/secrets/{{ item }}"
+      loop:
+      - wbaoftexas_db_pw.txt
+      - wbaoftexas_db_root_pw.txt
+
+    - name: Deploy with docker compose
+      ansible.builtin.shell:
+        cmd: "export WBAOFTEXAS_DB_PASS=$(cat secrets/wbaoftexas_db_pw.txt) && docker compose up -d"
+        chdir: "{{ deploy_path }}/wbaoftexas/"
+      register: compose_up_result
+
+    - name: Restart nginx to pick up wbaoftexas on shared network
+      ansible.builtin.shell:
+        cmd: "docker compose restart web"
+        chdir: "{{ deploy_path }}/nginx-demo"
+      register: nginx_restart_result
+      failed_when: false
+      changed_when: nginx_restart_result.rc == 0
