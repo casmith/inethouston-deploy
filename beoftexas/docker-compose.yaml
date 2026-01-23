@@ -15,7 +15,7 @@ services:
     restart: always
 
   web:
-    image: casmith/beoftexas:2026.01.20.919c851e
+    image: casmith/beoftexas:2026.01.23.aa28367c
     env_file:
       - .env
     networks:
@@ -30,33 +30,6 @@ services:
     depends_on:
       - mariadb
     restart: always
-
-#  strapi:
-#    image: naskio/strapi:4.25.11
-#    environment:
-#      DATABASE_CLIENT: postgres
-#      DATABASE_NAME: strapi
-#      DATABASE_HOST: postgres
-#      DATABASE_PORT: 5432
-#      DATABASE_USERNAME: strapi
-#    volumes:
-#      - ./app:/srv/app
-#    secrets:
-#      - strapi_db_pw
-#    depends_on:
-#      - postgres
-#    restart: always
-#  postgres:
-#    image: postgres
-#    environment:
-#      POSTGRES_DB: strapi
-#      POSTGRES_USER: strapi
-#      POSTGRES_PASSWORD_FILE: /run/secrets/strapi_db_pw
-#    volumes:
-#      - ./postgres:/var/lib/postgresql
-#    secrets:
-#      - strapi_db_pw
-#    restart: always
 
   mariadb:
     image: mariadb
