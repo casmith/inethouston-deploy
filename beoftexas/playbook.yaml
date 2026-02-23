@@ -35,6 +35,20 @@
         dest: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/beoftexas/.env"
         mode: '0600'
 
+    - name: Stop containers before clearing assets
+      ansible.builtin.shell:
+        cmd: "docker compose down"
+        chdir: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/beoftexas/"
+      register: compose_down_result
+      failed_when: false
+
+    - name: Remove public_files volume to clear old assets
+      ansible.builtin.shell:
+        cmd: "docker volume rm beoftexas_public_files"
+        chdir: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/beoftexas/"
+      register: volume_rm_result
+      failed_when: false
+
     - name: Deploy with docker compose
       ansible.builtin.shell:
         cmd: "docker compose up -d"
