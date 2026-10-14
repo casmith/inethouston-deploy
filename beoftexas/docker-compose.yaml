@@ -29,6 +29,8 @@ services:
       APP_URL: https://beoftexas.com
       # HTTPS-only behind the edge proxy: mark cookies Secure (beoftexas #428)
       SSL_ENABLED: "true"
+      # Real email delivery; anything else only mails MAIL_ALLOWLIST (beoftexas #432)
+      APP_ENV: production
     volumes:
       - public_files:/var/www/html/public
     depends_on:
