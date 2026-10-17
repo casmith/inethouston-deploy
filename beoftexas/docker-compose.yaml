@@ -15,7 +15,7 @@ services:
     restart: always
 
   web:
-    image: casmith/beoftexas:2026.03.22.20344a35
+    image: casmith/beoftexas:2026.10.17.bffaf73c
     env_file:
       - .env
     networks:
@@ -25,6 +25,12 @@ services:
       DB_HOST: mariadb
       DB_USER: beoftexas
       STRAPI_URL: https://strapi.beoftexas.com
+      # Site root for emailed password-reset links (beoftexas #414)
+      APP_URL: https://beoftexas.com
+      # HTTPS-only behind the edge proxy: mark cookies Secure (beoftexas #428)
+      SSL_ENABLED: "true"
+      # Real email delivery; anything else only mails MAIL_ALLOWLIST (beoftexas #432)
+      APP_ENV: production
     volumes:
       - public_files:/var/www/html/public
     depends_on:
