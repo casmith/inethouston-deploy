@@ -15,7 +15,7 @@ services:
     restart: always
 
   web:
-    image: casmith/beoftexas:2026.10.17.bffaf73c
+    image: casmith/beoftexas:2026.10.18.a3d6d202
     env_file:
       - .env
     networks:
