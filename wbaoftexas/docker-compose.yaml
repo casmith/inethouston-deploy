@@ -1,7 +1,7 @@
 name: wbaoftexas
 services:
   web:
-    image: casmith/wbaoftexas:2024.12.15.084d7de9
+    image: casmith/wbaoftexas:2026.10.22.503e2477
     networks:
       shared:
         aliases:
