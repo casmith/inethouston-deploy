@@ -21,7 +21,7 @@ services:
       - postgres
     restart: always
   postgres:
-    image: postgres
+    image: postgres:18
     environment:
       POSTGRES_DB: strapi
       POSTGRES_USER: strapi

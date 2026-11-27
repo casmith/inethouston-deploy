@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -eo pipefail
 
 # Nightly backup script for all databases
 # Designed to be run on the production server via GitHub Actions
@@ -55,6 +55,29 @@ if [ -n "$SINGLE_DB" ]; then
     echo "=== Single database mode: $SINGLE_DB ==="
 fi
 
+# Fail if a dump is not a valid gzip or decompresses to nothing.
+# Dump containers pipe through gzip, so a failed dump still produces a
+# ~20 byte empty .sql.gz and exits 0 (see issue #9).
+verify_backup() {
+    local file=$1
+
+    if [ ! -f "$file" ]; then
+        echo "ERROR: backup file not found: $file" >&2
+        exit 1
+    fi
+    if ! gzip -t "$file"; then
+        echo "ERROR: backup is not a valid gzip: $file" >&2
+        exit 1
+    fi
+    local size
+    size=$(( $(gzip -dc "$file" | wc -c) ))
+    if [ "$size" -eq 0 ]; then
+        echo "ERROR: backup is empty: $file" >&2
+        exit 1
+    fi
+    echo "  -> Verified $(basename "$file") (${size} bytes uncompressed)"
+}
+
 # Function to upload a backup to S3
 upload_backup() {
     local file=$1
@@ -75,32 +98,26 @@ upload_backup() {
 }
 
 # Function to backup PostgreSQL database
+# Runs pg_dump inside the running postgres container so the client always
+# matches the server major version (pg_dump refuses to dump a newer server).
 backup_postgres() {
-    local db_name=$1
-    local db_user=$2
-    local db_host=$3
-    local network=$4
-    local password_file=$5
-    local output_name=$6
+    local container=$1
+    local db_name=$2
+    local db_user=$3
+    local output_name=$4
 
     echo "Backing up PostgreSQL database: $db_name"
 
     # Clean staging area
     rm -rf $WORK_DIR/*
 
-    local db_pass=$(cat "$password_file")
+    local file="$WORK_DIR/${output_name}_${TIMESTAMP}.sql.gz"
+    docker exec "$container" pg_dump --username="$db_user" --dbname="$db_name" | gzip -c > "$file"
 
-    docker run --rm \
-        -v $WORK_DIR:/pgsqldump \
-        -e DB_USER="$db_user" \
-        -e DB_NAME="$db_name" \
-        -e DB_PASS="$db_pass" \
-        -e DB_HOST="$db_host" \
-        --network "$network" \
-        casmith/pgsqldump
+    verify_backup "$file"
 
     # Upload immediately
-    upload_backup "$WORK_DIR"/*.sql.gz "$output_name"
+    upload_backup "$file" "$output_name"
 
     echo "  -> Completed ${output_name}"
 }
@@ -144,8 +161,12 @@ backup_mariadb() {
         --network "$network" \
         casmith/mysqldump
 
+    local file
+    file=$(ls "$WORK_DIR"/*.sql.gz)
+    verify_backup "$file"
+
     # Upload immediately
-    upload_backup "$WORK_DIR"/*.sql.gz "$output_name"
+    upload_backup "$file" "$output_name"
 
     echo "  -> Completed ${output_name}"
 }
@@ -153,11 +174,9 @@ backup_mariadb() {
 # Backup Strapi PostgreSQL
 if [ -z "$SINGLE_DB" ] || [ "$SINGLE_DB" = "strapi" ]; then
     backup_postgres \
-        "strapi" \
-        "strapi" \
         "strapi-postgres-1" \
-        "strapi_default" \
-        "$DEPLOY_DIR/strapi/secrets/strapi_db_pw.txt" \
+        "strapi" \
+        "strapi" \
         "strapi"
 fi
 
