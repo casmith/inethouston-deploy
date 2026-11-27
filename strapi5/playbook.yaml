@@ -1,0 +1,102 @@
+- name: Deploy Strapi 5 via Docker
+  hosts: web01
+  become: true
+  vars:
+    strapi_dir: "{{ (deploy_path | default('/home/' ~ ansible_user)) }}/strapi5"
+    admin_env: "{{ lookup('ansible.builtin.file', '../secret/strapi5_admin.env') }}"
+    admin:
+      STRAPI_ADMIN_EMAIL: "{{ admin_env | regex_search('^STRAPI_ADMIN_EMAIL=(.*)$', '\\1', multiline=True) | first }}"
+      STRAPI_ADMIN_PASSWORD: "{{ admin_env | regex_search('^STRAPI_ADMIN_PASSWORD=(.*)$', '\\1', multiline=True) | first }}"
+      STRAPI_ADMIN_FIRSTNAME: "{{ admin_env | regex_search('^STRAPI_ADMIN_FIRSTNAME=(.*)$', '\\1', multiline=True) | first }}"
+      STRAPI_ADMIN_LASTNAME: "{{ admin_env | regex_search('^STRAPI_ADMIN_LASTNAME=(.*)$', '\\1', multiline=True) | first }}"
+  tasks:
+    - name: Log into DockerHub
+      docker_login:
+        username: '{{ lookup("env", "DOCKERHUB_USERNAME") }}'
+        password: '{{ lookup("env", "DOCKERHUB_PASSWORD") }}'
+
+    - name: Create directories
+      ansible.builtin.file:
+        path: "{{ strapi_dir }}/{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner | default(omit) }}"
+        group: "{{ item.owner | default(omit) }}"
+        mode: "{{ item.mode | default('0755') }}"
+      loop:
+        - { path: "" }
+        - { path: secrets, mode: "0700" }
+        # The image runs as node (uid 1000)
+        - { path: uploads, owner: "1000" }
+
+    - name: Create shared Docker network
+      community.docker.docker_network:
+        name: shared
+        state: present
+
+    - name: Copy Docker Compose file
+      ansible.builtin.copy:
+        src: docker-compose.yaml
+        dest: "{{ strapi_dir }}/docker-compose.yaml"
+        mode: "0644"
+
+    - name: Copy secrets
+      ansible.builtin.copy:
+        src: "../secret/{{ item }}"
+        dest: "{{ strapi_dir }}/secrets/{{ item }}"
+        mode: "0644"
+      loop:
+        - strapi5.env
+        - strapi5_db_pw.txt
+
+    - name: Pull and start
+      ansible.builtin.shell:
+        cmd: docker compose pull && docker compose up -d
+        chdir: "{{ strapi_dir }}"
+
+    - name: Wait for Strapi to answer its health check
+      ansible.builtin.shell:
+        cmd: docker compose exec -T web wget -q --spider http://127.0.0.1:1337/_health
+        chdir: "{{ strapi_dir }}"
+      register: health
+      until: health.rc == 0
+      retries: 60
+      delay: 5
+      changed_when: false
+
+    # One-off copy of the Strapi 3 content, straight from its container. The
+    # script refuses to touch a database that already has content.
+    - name: Import Strapi 3 content into an empty database
+      ansible.builtin.shell:
+        cmd: docker compose exec -T web node scripts/import-v3.js http://strapi-web:1337
+        chdir: "{{ strapi_dir }}"
+      register: import_result
+      changed_when: "'Imported' in import_result.stdout"
+      failed_when: import_result.rc != 0 and 'already has rows' not in import_result.stderr
+
+    - name: Check for an admin user
+      ansible.builtin.shell:
+        cmd: docker compose exec -T web wget -qO- http://127.0.0.1:1337/admin/init
+        chdir: "{{ strapi_dir }}"
+      register: admin_init
+      changed_when: false
+
+    # Until an admin exists, anyone reaching /admin could register as one
+    - name: Create the first admin user
+      when: (admin_init.stdout | from_json).data.hasAdmin != true
+      ansible.builtin.shell:
+        cmd: >-
+          docker compose exec -T web node_modules/.bin/strapi admin:create-user
+          --email={{ admin.STRAPI_ADMIN_EMAIL | quote }}
+          --password={{ admin.STRAPI_ADMIN_PASSWORD | quote }}
+          --firstname={{ admin.STRAPI_ADMIN_FIRSTNAME | quote }}
+          --lastname={{ admin.STRAPI_ADMIN_LASTNAME | quote }}
+        chdir: "{{ strapi_dir }}"
+      no_log: true
+
+    - name: Fail closed (before nginx exposes it) if there is still no admin
+      ansible.builtin.shell:
+        cmd: docker compose exec -T web wget -qO- http://127.0.0.1:1337/admin/init
+        chdir: "{{ strapi_dir }}"
+      register: admin_check
+      changed_when: false
+      failed_when: (admin_check.stdout | from_json).data.hasAdmin != true

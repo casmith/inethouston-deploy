@@ -1,0 +1,52 @@
+name: strapi5
+services:
+  web:
+    # Built by casmith/beoftexas-strapi; bump this tag to release
+    image: casmith/strapi:TAG_FROM_CI
+    init: true
+    env_file:
+      - ./secrets/strapi5.env
+    environment:
+      NODE_ENV: production
+      PUBLIC_URL: https://strapi.beoftexas.com
+      DATABASE_CLIENT: postgres
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: strapi
+      DATABASE_USERNAME: strapi
+      DATABASE_PASSWORD_FILE: /run/secrets/strapi5_db_pw
+    networks:
+      shared:
+        aliases:
+          - strapi5-web
+      default:
+    volumes:
+      - ./uploads:/opt/app/public/uploads
+    secrets:
+      - strapi5_db_pw
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: strapi
+      POSTGRES_USER: strapi
+      POSTGRES_PASSWORD_FILE: /run/secrets/strapi5_db_pw
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+    secrets:
+      - strapi5_db_pw
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U strapi -d strapi"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: always
+secrets:
+  strapi5_db_pw:
+    file: ./secrets/strapi5_db_pw.txt
+networks:
+  shared:
+    external: true
