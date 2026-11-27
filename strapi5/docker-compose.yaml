@@ -2,7 +2,7 @@ name: strapi5
 services:
   web:
     # Built by casmith/beoftexas-strapi; bump this tag to release
-    image: casmith/strapi:TAG_FROM_CI
+    image: casmith/strapi:2026.11.27.89690da1
     init: true
     env_file:
       - ./secrets/strapi5.env
