@@ -9,7 +9,7 @@ set -eo pipefail
 #   OPTIONS:
 #     --manual    Tag backup as "manual" instead of updating "latest"
 #     --single    Only backup the specified database (requires DATABASE argument)
-#   DATABASE:     Database name to backup (beoftexas, wbaoftexas, strapi, projectsend)
+#   DATABASE:     Database name to backup (beoftexas, wbaoftexas, strapi, strapi5, projectsend)
 #
 # Examples:
 #   backup-all-dbs.sh                    # Backup all databases, update latest
@@ -82,18 +82,19 @@ verify_backup() {
 upload_backup() {
     local file=$1
     local output_name=$2
+    local ext=${3:-sql.gz}
 
     # Upload timestamped version (with tag if specified)
     if [ -n "$BACKUP_TAG" ]; then
-        echo "  -> Uploading ${output_name}_${BACKUP_TAG}_${TIMESTAMP}.sql.gz"
-        aws --endpoint-url "$S3_ENDPOINT" s3 cp "$file" "s3://$S3_BUCKET/${output_name}_${BACKUP_TAG}_${TIMESTAMP}.sql.gz"
+        echo "  -> Uploading ${output_name}_${BACKUP_TAG}_${TIMESTAMP}.${ext}"
+        aws --endpoint-url "$S3_ENDPOINT" s3 cp "$file" "s3://$S3_BUCKET/${output_name}_${BACKUP_TAG}_${TIMESTAMP}.${ext}"
     else
-        echo "  -> Uploading ${output_name}_${TIMESTAMP}.sql.gz"
-        aws --endpoint-url "$S3_ENDPOINT" s3 cp "$file" "s3://$S3_BUCKET/${output_name}_${TIMESTAMP}.sql.gz"
+        echo "  -> Uploading ${output_name}_${TIMESTAMP}.${ext}"
+        aws --endpoint-url "$S3_ENDPOINT" s3 cp "$file" "s3://$S3_BUCKET/${output_name}_${TIMESTAMP}.${ext}"
 
         # Upload as "latest" only when not using a tag
-        echo "  -> Uploading ${output_name}_latest.sql.gz"
-        aws --endpoint-url "$S3_ENDPOINT" s3 cp "$file" "s3://$S3_BUCKET/${output_name}_latest.sql.gz"
+        echo "  -> Uploading ${output_name}_latest.${ext}"
+        aws --endpoint-url "$S3_ENDPOINT" s3 cp "$file" "s3://$S3_BUCKET/${output_name}_latest.${ext}"
     fi
 }
 
@@ -178,6 +179,27 @@ if [ -z "$SINGLE_DB" ] || [ "$SINGLE_DB" = "strapi" ]; then
         "strapi" \
         "strapi" \
         "strapi"
+fi
+
+# Backup Strapi 5 PostgreSQL and its uploads (skipped until it is deployed)
+if [ -z "$SINGLE_DB" ] || [ "$SINGLE_DB" = "strapi5" ]; then
+    if docker inspect strapi5-postgres-1 >/dev/null 2>&1; then
+        backup_postgres \
+            "strapi5-postgres-1" \
+            "strapi" \
+            "strapi" \
+            "strapi5"
+
+        echo "Backing up Strapi 5 uploads"
+        rm -rf $WORK_DIR/*
+        uploads_file="$WORK_DIR/strapi5_uploads_${TIMESTAMP}.tar.gz"
+        tar -czf "$uploads_file" -C "$DEPLOY_DIR/strapi5" uploads
+        gzip -t "$uploads_file"
+        upload_backup "$uploads_file" "strapi5_uploads" "tar.gz"
+        echo "  -> Completed strapi5_uploads"
+    else
+        echo "Skipping Strapi 5: strapi5-postgres-1 is not running"
+    fi
 fi
 
 # Backup Beoftexas MariaDB

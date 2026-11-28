@@ -71,5 +71,6 @@ jobs:
           ansible-playbook wbaoftexas/playbook.yaml --private-key private_key.pem
           ansible-playbook projectsend/playbook.yaml --private-key private_key.pem
           ansible-playbook strapi/playbook.yaml --private-key private_key.pem
+          ansible-playbook strapi5/playbook.yaml --private-key private_key.pem
           ansible-playbook nginx/playbook.yaml --private-key private_key.pem
           ansible-playbook backup/playbook.yaml --private-key private_key.pem

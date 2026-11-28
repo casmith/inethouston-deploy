@@ -74,8 +74,10 @@ ansible-playbook -i hosts.yaml install-docker.yaml
 Deploy in this order to ensure dependencies are met:
 
 ```bash
-# Strapi (required by beoftexas)
+# Strapi (required by beoftexas). strapi/ is the end-of-life Strapi 3,
+# kept only until production beoftexas reads from Strapi 5's /api.
 ansible-playbook -i hosts.yaml strapi/playbook.yaml
+ansible-playbook -i hosts.yaml strapi5/playbook.yaml
 
 # Main applications
 ansible-playbook -i hosts.yaml beoftexas/playbook.yaml
@@ -109,7 +111,8 @@ ansible-playbook -i hosts.yaml nginx/restore-certbot.yaml
 
 All services connect via a shared Docker network:
 
-- **Strapi**: `strapi-web:1337` (PostgreSQL backend)
+- **Strapi 3** (end-of-life, read-only legacy routes): `strapi-web:1337` (PostgreSQL backend)
+- **Strapi 5**: `strapi5-web:1337` (PostgreSQL backend); serves strapi.beoftexas.com
 - **Benefit Elect**: `beoftexas-web:8000` (MariaDB backend)
 - **WBA of Texas**: `wbaoftexas-web:8000` (MariaDB backend)
 - **ProjectSend**: `projectsend-web:80` (MariaDB backend)
@@ -117,7 +120,8 @@ All services connect via a shared Docker network:
 
 ### Deployment Paths
 
-- `/home/ubuntu/deploy/strapi` - Strapi CMS
+- `/home/ubuntu/deploy/strapi` - Strapi 3 CMS (end-of-life)
+- `/home/ubuntu/deploy/strapi5` - Strapi 5 CMS (`uploads/` holds the media)
 - `/home/ubuntu/deploy/beoftexas` - Benefit Elect of Texas
 - `/home/ubuntu/deploy/wbaoftexas` - WBA of Texas
 - `/home/ubuntu/deploy/projectsend` - ProjectSend
@@ -177,3 +181,23 @@ echo 'export CONTABO_S3_SECRET_KEY="..."' >> ~/.bashrc
 echo 'export CONTABO_S3_BUCKET="beoftexas-backup"' >> ~/.bashrc
 source ~/.bashrc
 ```
+
+## Strapi 5
+
+The image is built by casmith/beoftexas-strapi (`casmith/strapi:<YYYY.MM.DD.sha>`);
+release by bumping the tag in `strapi5/docker-compose.yaml` and pushing `master`.
+
+On its first deploy `strapi5/playbook.yaml` imports the Strapi 3 content
+(`scripts/import-v3.js`, keeping ids and upload file names) and creates the
+first admin from `secret/strapi5_admin.env`. Both steps are no-ops afterwards.
+The playbook fails, before nginx is deployed, if no admin exists, so
+`/admin` is never exposed without one.
+
+The edge nginx (`nginx/conf/strapi.beoftexas.com.conf`) sends `/api`,
+`/admin` and `/uploads` to Strapi 5, and the read-only Strapi 3 routes
+(`/menus`, `/articles/:id`, `/file-attachments`) to Strapi 3 for older
+beoftexas builds. Once production beoftexas reads from `/api`, remove that
+location and the `strapi/` stack.
+
+Nightly backups include the Strapi 5 database (`strapi5_*.sql.gz`) and
+uploads (`strapi5_uploads_*.tar.gz`).
